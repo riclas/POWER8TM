@@ -43,7 +43,7 @@
 #  define P_MALLOC(size)                malloc(size)
 #  define P_FREE(ptr)                   free(ptr)
 #  define TM_MALLOC(size)               malloc(size)
-#  define FAST_PATH_FREE(ptr)           free(ptr) 
+#  define FAST_PATH_FREE(ptr)           free(ptr)
 #  define SLOW_PATH_FREE(ptr)             free(ptr)
 
 # define SETUP_NUMBER_TASKS(n)
@@ -56,7 +56,7 @@
 #include <asm/unistd.h>
 #define rmb()           asm volatile ("sync" ::: "memory")
 #define cpu_relax()     asm volatile ("" ::: "memory");
-//#define cpu_relax() asm volatile ("or 31,31,31") 
+//#define cpu_relax() asm volatile ("or 31,31,31")
 #ifdef REDUCED_TM_API
 #    define SPECIAL_THREAD_ID()         get_tid()
 #else
@@ -95,6 +95,40 @@ __TM_is_nontrans_conflict(void* const TM_buff)
 
 extern __inline long
 __attribute__ ((__gnu_inline__, __always_inline__, __artificial__))
+__TM_is_persistent_abort(void* const TM_buff)
+{
+  texasr_t texasr = *_TEXASR_PTR (TM_buff);
+  return _TEXASR_FAILURE_PERSISTENT (texasr);
+}
+
+extern __inline long
+__attribute__ ((__gnu_inline__, __always_inline__, __artificial__))
+__TM_conflict(void* const TM_buff)
+{
+  texasr_t texasr = *_TEXASR_PTR (TM_buff);
+  /* Return TEXASR bits 11 (Self-Induced Conflict) through
+     14 (Translation Invalidation Conflict).  */
+  return (_TEXASR_EXTRACT_BITS (texasr, 14, 4)) ? 1 : 0;
+}
+
+extern __inline long
+__attribute__ ((__gnu_inline__, __always_inline__, __artificial__))
+__TM_user_abort (void* const TM_buff)
+{
+  texasr_t texasr = *_TEXASR_PTR (TM_buff);
+  return _TEXASR_ABORT (texasr);
+}
+
+extern __inline long
+__attribute__ ((__gnu_inline__, __always_inline__, __artificial__))
+__TM_capacity_abort (void* const TM_buff)
+{
+  texasr_t texasr = *_TEXASR_PTR (TM_buff);
+  return _TEXASR_FOOTPRINT_OVERFLOW (texasr);
+}
+
+extern __inline long
+__attribute__ ((__gnu_inline__, __always_inline__, __artificial__))
 __TM_begin_rot (void* const TM_buff)
 {
   *_TEXASRL_PTR (TM_buff) = 0;
@@ -111,7 +145,7 @@ __TM_begin_rot (void* const TM_buff)
   return 0;
 }
 
-#  define TM_STARTUP(numThread, bId)		
+#  define TM_STARTUP(numThread, bId)
 #  define TM_SHUTDOWN(){ \
     unsigned long read_commits = 0; \
     unsigned long htm_commits = 0; \
@@ -157,7 +191,7 @@ __TM_begin_rot (void* const TM_buff)
        gl_commits += stats_array[i].gl_commits; \
     } \
     printf("Total commits: %lu\n\tRead commits: %lu\n\tHTM commits:  %lu\n\tROT commits:  %lu\n\tGL commits: %lu\nTotal aborts: %lu\n\tHTM conflict aborts:  %lu\n\t\tHTM self aborts:  %lu\n\t\tHTM trans aborts:  %lu\n\t\tHTM non-trans aborts:  %lu\n\tHTM user aborts :  %lu\n\tHTM capacity aborts:  %lu\n\t\tHTM persistent aborts:  %lu\n\tHTM other aborts:  %lu\n\tROT conflict aborts:  %lu\n\t\tROT self aborts:  %lu\n\t\tROT trans aborts:  %lu\n\t\tROT non-trans aborts:  %lu\n\tROT user aborts:  %lu\n\tROT capacity aborts:  %lu\n\t\tROT persistent aborts:  %lu\n\tROT other aborts:  %lu\n", read_commits+htm_commits+rot_commits+gl_commits, read_commits, htm_commits, rot_commits, gl_commits,htm_conflict_aborts+htm_user_aborts+htm_capacity_aborts+htm_other_aborts+rot_conflict_aborts+rot_user_aborts+rot_capacity_aborts+rot_other_aborts,htm_conflict_aborts,htm_self_conflicts,htm_trans_conflicts,htm_nontrans_conflicts,htm_user_aborts,htm_capacity_aborts,htm_persistent_aborts,htm_other_aborts,rot_conflict_aborts,rot_self_conflicts,rot_trans_conflicts,rot_nontrans_conflicts,rot_user_aborts,rot_capacity_aborts,rot_persistent_aborts,rot_other_aborts); \
-} \ 
+} \
 
 #  define TM_THREAD_ENTER()	//rot_readset = (long*)malloc(sizeof(long)*100000);
 #  define TM_THREAD_EXIT()
@@ -201,7 +235,7 @@ __TM_begin_rot (void* const TM_buff)
 			} \
 			break; \
 		} \
-		else if(__TM_is_conflict(&TM_buff)){ \
+		else if(__TM_conflict(&TM_buff)){ \
 			stats_array[local_thread_id].htm_conflict_aborts ++; \
 			if(__TM_is_self_conflict(&TM_buff)) {stats_array[local_thread_id].htm_self_conflicts++; }\
 			else if(__TM_is_trans_conflict(&TM_buff)) stats_array[local_thread_id].htm_trans_conflicts++; \
@@ -218,15 +252,15 @@ __TM_begin_rot (void* const TM_buff)
 			if (backoff < MAX_BACKOFF) \
 				backoff <<=1 ; \
 		} \
-		else if (__TM_is_user_abort(&TM_buff)) { \
+		else if (__TM_user_abort(&TM_buff)) { \
 			stats_array[local_thread_id].htm_user_aborts ++; \
                         htm_status = 0; \
                         htm_budget--; \
                 } \
-		else if(__TM_is_footprint_exceeded(&TM_buff)){ \
+		else if(__TM_capacity_abort(&TM_buff)){ \
 			htm_status = 0; \
 			stats_array[local_thread_id].htm_capacity_aborts ++; \
-			if(__TM_is_failure_persistent(&TM_buff)) stats_array[local_thread_id].htm_persistent_aborts ++; \
+			if(__TM_is_persistent_abort(&TM_buff)) stats_array[local_thread_id].htm_persistent_aborts ++; \
 			break; \
 		} \
 		else{ \
@@ -297,7 +331,7 @@ static __inline__ unsigned long long rdtsc(void)
 			single_global_lock = single_global_lock;*/\
                         break; \
                 } \
-		else if(__TM_is_conflict(&TM_buff)){ \
+		else if(__TM_conflict(&TM_buff)){ \
 			/*printf("conflict: %p\n",__TM_failure_address(&TM_buff)); */\
                         stats_array[local_thread_id].rot_conflict_aborts ++; \
 			if(__TM_is_self_conflict(&TM_buff)) stats_array[local_thread_id].rot_self_conflicts++; \
@@ -321,15 +355,15 @@ static __inline__ unsigned long long rdtsc(void)
                         if (backoff < MAX_BACKOFF) \
                                 backoff <<= 1; \
                 } \
-                else if (__TM_is_user_abort(&TM_buff)) { \
+                else if (__TM_user_abort(&TM_buff)) { \
                         stats_array[local_thread_id].rot_user_aborts ++; \
                         rot_status = 0; \
                         rot_budget--; \
                 } \
-                else if(__TM_is_footprint_exceeded(&TM_buff)){ \
+                else if(__TM_capacity_abort(&TM_buff)){ \
 			rot_status = 0; \
 			stats_array[local_thread_id].rot_capacity_aborts ++; \
-			if(__TM_is_failure_persistent(&TM_buff)) stats_array[local_thread_id].rot_persistent_aborts ++; \
+			if(__TM_is_persistent_abort(&TM_buff)) stats_array[local_thread_id].rot_persistent_aborts ++; \
                         break; \
 		} \
                 else{ \

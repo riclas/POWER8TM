@@ -2,11 +2,12 @@
 
 **Requirements:**
 
-* Install: tcmalloc (needed for all backends)
 * Install: boost libraries (needed for TPCC)
 
 
 **Backends:**
+
+* p8tm-si: POWER8-TM for Snapshot Isolation
 
 * p8tm: POWER8-TM with time efficient read-set tracking
 

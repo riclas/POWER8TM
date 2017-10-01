@@ -28,7 +28,6 @@
 #  include "memory.h"
 #  include "thread.h"
 #  include "types.h"
-#  include "thread.h"
 #  include <math.h>
 
 #  define TM_ARG                        /* nothing */
@@ -43,8 +42,8 @@
 #  define P_MALLOC(size)                malloc(size)
 #  define P_FREE(ptr)                   free(ptr)
 #  define TM_MALLOC(size)               malloc(size)
-#  define FAST_PATH_FREE(ptr)           free(ptr) 
-#  define SLOW_PATH_FREE(ptr)           free(ptr)
+#  define FAST_PATH_FREE(ptr)           free(ptr)
+#  define SLOW_PATH_FREE(ptr)             free(ptr)
 
 # define SETUP_NUMBER_TASKS(n)
 # define SETUP_NUMBER_THREADS(n)
@@ -56,7 +55,7 @@
 #include <asm/unistd.h>
 #define rmb()           asm volatile ("sync" ::: "memory")
 #define cpu_relax()     asm volatile ("" ::: "memory");
-//#define cpu_relax() asm volatile ("or 31,31,31") 
+//#define cpu_relax() asm volatile ("or 31,31,31")
 #ifdef REDUCED_TM_API
 #    define SPECIAL_THREAD_ID()         get_tid()
 #else
@@ -66,8 +65,6 @@
 //#  include <immintrin.h>
 //#  include <rtmintrin.h>
 #include <htmxlintrin.h>
-
-
 
 extern __inline long
 __attribute__ ((__gnu_inline__, __always_inline__, __artificial__))
@@ -92,7 +89,6 @@ __TM_is_nontrans_conflict(void* const TM_buff)
   texasr_t texasr = __builtin_get_texasr ();
   return _TEXASR_NON_TRANSACTIONAL_CONFLICT (texasr);
 }
-
 
 extern __inline long
 __attribute__ ((__gnu_inline__, __always_inline__, __artificial__))
@@ -148,6 +144,8 @@ __TM_begin_rot (void* const TM_buff)
 
 #  define TM_STARTUP(numThread, bId)
 #  define TM_SHUTDOWN(){ \
+    unsigned long wait_time = 0; \
+    unsigned long total_time = 0; \
     unsigned long read_commits = 0; \
     unsigned long htm_commits = 0; \
     unsigned long htm_conflict_aborts = 0; \
@@ -170,6 +168,8 @@ __TM_begin_rot (void* const TM_buff)
     unsigned long gl_commits = 0; \
     int i = 0; \
     for (; i < 80; i++) { \
+       wait_time += stats_array[i].wait_time; \
+       total_time += stats_array[i].total_time; \
        read_commits += stats_array[i].read_commits; \
        htm_commits += stats_array[i].htm_commits; \
        htm_conflict_aborts += stats_array[i].htm_conflict_aborts; \
@@ -191,10 +191,33 @@ __TM_begin_rot (void* const TM_buff)
        rot_other_aborts += stats_array[i].rot_other_aborts; \
        gl_commits += stats_array[i].gl_commits; \
     } \
-    printf("Total commits: %lu\n\tRead commits: %lu\n\tHTM commits:  %lu\n\tROT commits:  %lu\n\tGL commits: %lu\nTotal aborts: %lu\n\tHTM conflict aborts:  %lu\n\t\tHTM self aborts:  %lu\n\t\tHTM trans aborts:  %lu\n\t\tHTM non-trans aborts:  %lu\n\tHTM user aborts :  %lu\n\tHTM capacity aborts:  %lu\n\t\tHTM persistent aborts:  %lu\n\tHTM other aborts:  %lu\n\tROT conflict aborts:  %lu\n\t\tROT self aborts:  %lu\n\t\tROT trans aborts:  %lu\n\t\tROT non-trans aborts:  %lu\n\tROT user aborts:  %lu\n\tROT capacity aborts:  %lu\n\t\tROT persistent aborts:  %lu\n\tROT other aborts:  %lu\n", read_commits+htm_commits+rot_commits+gl_commits, read_commits, htm_commits, rot_commits, gl_commits,htm_conflict_aborts+htm_user_aborts+htm_capacity_aborts+htm_other_aborts+rot_conflict_aborts+rot_user_aborts+rot_capacity_aborts+rot_other_aborts,htm_conflict_aborts,htm_self_conflicts,htm_trans_conflicts,htm_nontrans_conflicts,htm_user_aborts,htm_capacity_aborts,htm_persistent_aborts,htm_other_aborts,rot_conflict_aborts,rot_self_conflicts,rot_trans_conflicts,rot_nontrans_conflicts,rot_user_aborts,rot_capacity_aborts,rot_persistent_aborts,rot_other_aborts); \
-} \ 
+    printf("Total time: %lu\n \
+    Total wait time: %lu\n \
+    Total commits: %lu\n \
+       \tRead commits: %lu\n \
+       \tHTM commits:  %lu\n \
+       \tROT commits:  %lu\n \
+       \tGL commits: %lu\n \
+    Total aborts: %lu\n \
+       \tHTM conflict aborts:  %lu\n \
+          \t\tHTM self aborts:  %lu\n \
+          \t\tHTM trans aborts:  %lu\n \
+          \t\tHTM non-trans aborts:  %lu\n \
+       \tHTM user aborts :  %lu\n \
+       \tHTM capacity aborts:  %lu\n \
+          \t\tHTM persistent aborts:  %lu\n \
+       \tHTM other aborts:  %lu\n \
+       \tROT conflict aborts:  %lu\n \
+          \t\tROT self aborts:  %lu\n \
+          \t\tROT trans aborts:  %lu\n \
+          \t\tROT non-trans aborts:  %lu\n \
+       \tROT user aborts:  %lu\n \
+       \tROT capacity aborts:  %lu\n \
+          \t\tROT persistent aborts:  %lu\n \
+       \tROT other aborts:  %lu\n", total_time, wait_time, read_commits+htm_commits+rot_commits+gl_commits, read_commits, htm_commits, rot_commits, gl_commits,htm_conflict_aborts+htm_user_aborts+htm_capacity_aborts+htm_other_aborts+rot_conflict_aborts+rot_user_aborts+rot_capacity_aborts+rot_other_aborts,htm_conflict_aborts,htm_self_conflicts,htm_trans_conflicts,htm_nontrans_conflicts,htm_user_aborts,htm_capacity_aborts,htm_persistent_aborts,htm_other_aborts,rot_conflict_aborts,rot_self_conflicts,rot_trans_conflicts,rot_nontrans_conflicts,rot_user_aborts,rot_capacity_aborts,rot_persistent_aborts,rot_other_aborts); \
+} \
 
-#  define TM_THREAD_ENTER()
+#  define TM_THREAD_ENTER()	//rot_readset = (long*)malloc(sizeof(long)*100000);
 #  define TM_THREAD_EXIT()
 
 # define IS_LOCKED(lock)        *((volatile int*)(&lock)) != 0
@@ -219,7 +242,7 @@ __TM_begin_rot (void* const TM_buff)
 	} \
 }; \
 
-# define RELEASE_READ_LOCK() counters[local_thread_id].value+=7; stats_array[local_thread_id].read_commits++; 
+# define RELEASE_READ_LOCK() counters[local_thread_id].value+=7; stats_array[local_thread_id].read_commits++;
 
 # define USE_HTM(){ \
 	int htm_budget = HTM_RETRIES; \
@@ -243,15 +266,15 @@ __TM_begin_rot (void* const TM_buff)
                         else if(__TM_is_nontrans_conflict(&TM_buff)) stats_array[local_thread_id].htm_nontrans_conflicts++; \
                         htm_status = 0; \
                         htm_budget--; \
-			unsigned long wait; \
+			/*unsigned long wait; \
 			volatile int j; \
 			cm_seed ^= (cm_seed << 17); \
 			cm_seed ^= (cm_seed >> 13); \
 			cm_seed ^= (cm_seed << 5); \
-			wait = cm_seed % backoff; \
+			ait = cm_seed % backoff; \
 			for (j = 0; j < wait; j++); \
 			if (backoff < MAX_BACKOFF) \
-				backoff <<=1 ; \
+				backoff <<=1 ;*/ \
 		} \
 		else if (__TM_user_abort(&TM_buff)) { \
 			stats_array[local_thread_id].htm_user_aborts ++; \
@@ -261,7 +284,7 @@ __TM_begin_rot (void* const TM_buff)
 		else if(__TM_capacity_abort(&TM_buff)){ \
 			htm_status = 0; \
 			stats_array[local_thread_id].htm_capacity_aborts ++; \
-			if(__TM_persistent_abort(&TM_buff)) stats_array[local_thread_id].htm_persistent_aborts ++; \
+			if(__TM_is_persistent_abort(&TM_buff)) stats_array[local_thread_id].htm_persistent_aborts ++; \
 			break; \
 		} \
 		else{ \
@@ -293,6 +316,8 @@ static __inline__ unsigned long long rdtsc(void)
   return(result);
 }
 
+# define READ_TIMESTAMP(dest) __asm__ volatile("0:                  \n\tmfspr   %0,268           \n": "=r"(dest));
+
 # define USE_ROT(){ \
 	int rot_budget = ROT_RETRIES; \
 	while(IS_LOCKED(single_global_lock)){ \
@@ -315,13 +340,25 @@ static __inline__ unsigned long long rdtsc(void)
 			while(IS_LOCKED(single_global_lock)) cpu_relax(); \
 			continue; \
 		} \
+                /*rot_readset = (readset_t *)malloc(sizeof(readset_t)); \
+                readset_item_t *item = (readset_item_t *)malloc(sizeof(readset_item_t)); \
+                item->addr = -1; \
+                item->next = NULL; \
+                rot_readset->head = item; */\
 		rs_counter = 0; \
 		/*printf("thread %d starting ROT with counters %d and rot counters %d\n",local_thread_id,counters[local_thread_id].value,rot_counters[local_thread_id].value); */\
 		unsigned char tx_status = __TM_begin_rot(&TM_buff); \
 		if (tx_status == _HTM_TBEGIN_STARTED) { \
+			/*rot_counters[local_thread_id].value ++; */\			
+			/*begin_rot = rdtsc(); */\
+                        /*if(IS_LOCKED(single_global_lock)){ \
+                                __TM_abort(); \
+                        } \
+			single_global_lock = single_global_lock;*/\
                         break; \
                 } \
 		else if(__TM_conflict(&TM_buff)){ \
+			/*printf("conflict: %p\n",__TM_failure_address(&TM_buff)); */\
                         stats_array[local_thread_id].rot_conflict_aborts ++; \
 			if(__TM_is_self_conflict(&TM_buff)) stats_array[local_thread_id].rot_self_conflicts++; \
 			else if(__TM_is_trans_conflict(&TM_buff)) stats_array[local_thread_id].rot_trans_conflicts++; \
@@ -334,7 +371,7 @@ static __inline__ unsigned long long rdtsc(void)
                 	else if(state == 3) \
                         	counters[local_thread_id].value += 5;\
                 	rmb(); \
-                        unsigned long wait; \
+                        /*unsigned long wait; \
                         volatile int j; \
                         cm_seed ^= (cm_seed << 17); \
                         cm_seed ^= (cm_seed >> 13); \
@@ -342,7 +379,7 @@ static __inline__ unsigned long long rdtsc(void)
                         wait = cm_seed % backoff; \
                         for (j = 0; j < wait; j++); \
                         if (backoff < MAX_BACKOFF) \
-                                backoff <<= 1; \
+                                backoff <<= 1; */\
                 } \
                 else if (__TM_user_abort(&TM_buff)) { \
                         stats_array[local_thread_id].rot_user_aborts ++; \
@@ -352,7 +389,7 @@ static __inline__ unsigned long long rdtsc(void)
                 else if(__TM_capacity_abort(&TM_buff)){ \
 			rot_status = 0; \
 			stats_array[local_thread_id].rot_capacity_aborts ++; \
-			if(__TM_persistent_abort(&TM_buff)) stats_array[local_thread_id].rot_persistent_aborts ++; \
+			if(__TM_is_persistent_abort(&TM_buff)) stats_array[local_thread_id].rot_persistent_aborts ++; \
                         break; \
 		} \
                 else{ \
@@ -384,10 +421,10 @@ static __inline__ unsigned long long rdtsc(void)
 # define ACQUIRE_WRITE_LOCK() { \
 	/*while(IS_LOCKED(single_global_lock)){ \
 		cpu_relax(); \
-	} */\
+	} \
 	int htm_status = 0; \
 	USE_HTM(); \
-	if(!htm_status){ \ 
+	if(!htm_status){ */\
 		local_exec_mode = 1; \
 		int rot_status = 0; \
 		USE_ROT(); \
@@ -395,13 +432,13 @@ static __inline__ unsigned long long rdtsc(void)
 			local_exec_mode = 2; \
 			ACQUIRE_GLOBAL_LOCK(); \
 		} \
-	} \
+		/*triggers[local_thread_id].value = 1;*/ \
+	/*} */\
 };\
 
 # define QUIESCENCE_CALL_ROT(){ \
 	long num_threads = global_numThread; \
 	long index;\
-	unsigned  mask = (1 << 3) - 1;\
 	int state;\
 	volatile long temp; \
 	long counters_snapshot[80]; \
@@ -425,19 +462,32 @@ static __inline__ unsigned long long rdtsc(void)
 				break;\
 		} \
         } \
-	/*TOUCH_REVALIDATION(); \
-        __TM_suspend(); \
+	/*counters_snapshot[local_thread_id] =  0;*/ \
+	/*TOUCH_REVALIDATION();*/ \
+	/*__TM_suspend(); \
         counters[local_thread_id].value += 4; \
         rmb(); \
-        __TM_resume(); */\
-	for(index=0; index < 80; index++){ \
-		if (index == num_threads) break; \
+         __TM_resume(); */\
+	long start_wait_time; \
+	READ_TIMESTAMP(start_wait_time); \
+	/*long waited_threads = 0, waited = 0; */\
+	for(index=0; index < num_threads; index++){ \
 		if(counters_snapshot[index] != 0){ \
 			while(counters[index].value == counters_snapshot[index]){ \
-				cpu_relax(); \
+				/*if(waited_threads >= num_threads*WAIT_RATIO){*/ \
+					void* temp = triggers[index].value; \
+					/*break; \
+				/*} else { \
+					waited = 1; \
+					cpu_relax(); \
+				/*}*/ \
 			} \
+			/*waited_threads += waited; */\
 		} \
 	} \
+        long end_wait_time; \
+       	READ_TIMESTAMP(end_wait_time); \
+       	stats_array[local_thread_id].wait_time += end_wait_time - start_wait_time; \
 };
 
 # define QUIESCENCE_CALL(){ \
@@ -465,6 +515,19 @@ static __inline__ unsigned long long rdtsc(void)
         } \
 };
 
+# define QUIESCENCE_CALL_SINGLE(){ \
+	int num_threads = global_numThread; \
+        int index;\
+        register long temp; \
+        for(index=0; index < num_threads; index++){ \
+                temp = counters[index].value; \
+                if(temp & 1){ \
+			while(temp == counters[index].value) \
+                        cpu_relax(); \
+                }\
+        } \
+};
+
 # define QUIESCENCE_CALL_GL(){ \
         /*__attribute__((aligned(CACHE_LINE_SIZE))) padded_scalar_t num_threads; \
         num_threads.value = global_numThread; \
@@ -480,56 +543,50 @@ static __inline__ unsigned long long rdtsc(void)
 
 
 # define TOUCH_REVALIDATION(){ \
-	int index = 0; \
-	long temp; \
-	long base = 0; \
-	int16_t* base_p = (int16_t*)&base; \
-	int step = 0; \
-        while(index<rs_counter){ \
-		base_p[3] = i2rot_readset[index++]; \
-		/*printf("temp_add: %p\n",temp_add); */\
-		step = base_p[3] & 0x70; \
-		if(step== 0x70){ \
-			base_p[0] = i2rot_readset[index++];\
-			base_p[1] = i2rot_readset[index++];\
-			base_p[2] = i2rot_readset[index++];\
-			/*printf("new base: %p\t%p\t%p\t%p\t%p\n",base,base_p[0],base_p[1],base_p[2],base_p[3]); */\
-			temp = *(long *)base; \
+        intptr_t temp; \
+        int index; \
+        for(index=0;index<rs_counter;index++){ \
+		if(rot_readset[index]){ \
+	                temp = *(intptr_t *)rot_readset[index]; \
+			/*if(temp) \
+				rot_readset_values[index] = (long)temp; */\
 		} \
-		else if(step == 0x30) {\
-			base_p[2] = i2rot_readset[index++];\
-			/*printf("address: %p\t%p\t%p\n",base,i2rot_readset[index-1],i2rot_readset[index-2]); */\
-                        temp = *(long *)base; \
-		} \
-		else {\ 
-			temp = *(long *)base; \
-		} \
+		/*if(rot_readset->head->type) \
+			temp = rot_readset->head->addr_p; \
+		else{ \
+			if (rot_readset->head->addr == -1) \
+				break; \
+			temp = *rot_readset->head->addr; \
+		} */\
+		/*printf("read set has entry %d\n",*rot_readset->head->addr);*/\
+		/*rot_readset->head = rot_readset->head->next; */\
 	} \
 };
 
 # define RELEASE_WRITE_LOCK(){ \
 	if(!local_exec_mode){ \
 		__TM_suspend(); \
-		QUIESCENCE_CALL_GL();\
+		QUIESCENCE_CALL_SINGLE();\
 		__TM_resume(); \
 		__TM_end(); \
 		/*printf("thread %d committed in HTM with counters %lu\n",local_thread_id,counters[local_thread_id].value); */\
 		stats_array[local_thread_id].htm_commits++; \
 	} \
-	else if(local_exec_mode & 1){ \
+	else if(local_exec_mode == 1){ \
 		/*unsigned long long int length = rdtsc() -begin_rot ; */\
-                __TM_suspend(); \
-                counters[local_thread_id].value += 4; \
-                rmb(); \
-                __TM_resume(); \
-                QUIESCENCE_CALL_ROT(); \
-                TOUCH_REVALIDATION(); \
-		__TM_end(); \
-		counters[local_thread_id].value++; \
+	        __TM_suspend(); \
+	        counters[local_thread_id].value += 4; \
         	rmb(); \
+	         __TM_resume(); \
+		QUIESCENCE_CALL_ROT(); \
+                /*TOUCH_REVALIDATION(); */\
+		__TM_end(); \
+		counters[local_thread_id].value+=1; \
+        	/*rmb(); \
+		printf("rscounter\t%d\n",rs_counter); */\
 		/*printf("thread %d committed in ROT with counters %lu and rot_counters %d\n",local_thread_id,counters[local_thread_id].value,rot_counters[local_thread_id].value); */\
 		stats_array[local_thread_id].rot_commits++; \
-		/*printf("length of tx is: %lu\n",length); */\
+		/*printf("length of tx is: %lu\n",rs_counter); */\
 	} \
 	else{ \
 		pthread_spin_unlock(&single_global_lock); \
@@ -539,16 +596,13 @@ static __inline__ unsigned long long rdtsc(void)
 	/*printf("thread %d committed\n",local_thread_id); */\
 };
 
-# define TM_BEGIN_EXT(b,ro) { \
+# define TM_BEGIN_EXT(b,ro) {  \
 	/*unsigned long long int begin_rot; */\
 	local_exec_mode = 0; \
-	offset = 0; \
-	moffset = 0; \
-	moffset_2 = 0; \
-	moffset_6 = 0; \
-	local_thread_id = SPECIAL_THREAD_ID();\
 	rs_counter = 0; \
+	local_thread_id = SPECIAL_THREAD_ID();\
 	backoff = MIN_BACKOFF; \
+        /*TIMER_READ(start_time);*/ \
 	if(ro){ \
 		ACQUIRE_READ_LOCK(); \
 	} \
@@ -564,6 +618,9 @@ static __inline__ unsigned long long rdtsc(void)
 	else{ \
 		RELEASE_WRITE_LOCK(); \
 	} \
+	/*TIMER_T end_time; \
+        TIMER_READ(end_time); \
+        stats_array[local_thread_id].total_time += TIMER_DIFF_USEC(start_time, end_time); */\
 };
 
 #    define TM_BEGIN_RO()                 TM_BEGIN(1)
@@ -572,38 +629,10 @@ static __inline__ unsigned long long rdtsc(void)
 
 # define FAST_PATH_RESTART() __TM_abort();
 
-
-
-
-#define LOG_ADDRESS(var)             			if(var){ \
-								long curr_addr = (long)var; \
-								i2p = (int16_t *)&curr_addr; \
-                                                                register long mcurr_addr = curr_addr & rs_mask_2; \
-                                                                if(!(mcurr_addr ^ moffset_2)){ \
-									i2rot_readset[rs_counter++] = (i2p[3] & 0xFF80) | 0x10; \
-                                                                } \
-								else{ \
-									mcurr_addr = curr_addr & rs_mask_4; \
-                	                                                if(!(mcurr_addr ^ moffset)){ \
-										i2rot_readset[rs_counter++] = (i2p[3] & 0xFF80) | 0x30; \
-										i2rot_readset[rs_counter++] = i2p[2]; \
-									} \
-									else{ \
-										offset = (long)var; \
-										moffset = offset & rs_mask_4; \
-										moffset_2 = offset & rs_mask_2; \
-										i2rot_readset[rs_counter++] = (i2p[3] & 0xFF80) | 0x70; \
-										i2rot_readset[rs_counter++] = i2p[0]; \
-										i2rot_readset[rs_counter++] = i2p[1]; \
-										i2rot_readset[rs_counter++] = i2p[2]; \
-									} \
-								} \
-							} \
-
-# define SLOW_PATH_SHARED_READ(var)           var; LOG_ADDRESS(&var)
-# define SLOW_PATH_SHARED_READ_P(var)         var; LOG_ADDRESS(var)
-# define SLOW_PATH_SHARED_READ_D(var)         var; LOG_ADDRESS(&var)
-
+#define SLOW_PATH_SHARED_READ(var)             var; //rot_readset[rs_counter++] = &var;
+#define SLOW_PATH_SHARED_READ_P(var)           var; //rot_readset[rs_counter++] = var;
+#define SLOW_PATH_SHARED_READ_D(var)           var; //rot_readset[rs_counter++] = &var;
+//#define SLOW_PATH_SHARED_READ_P(var)           var;
 
 #define FAST_PATH_SHARED_READ(var)                 var
 #define FAST_PATH_SHARED_READ_P(var)                  var

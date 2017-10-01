@@ -46,7 +46,7 @@ __attribute__((aligned(CACHE_LINE_SIZE))) pthread_spinlock_t fallback_in_use = 0
 
 
 __attribute__((aligned(CACHE_LINE_SIZE))) padded_scalar_t counters[80];
-
+__attribute__((aligned(CACHE_LINE_SIZE))) padded_scalar_t triggers[80];
 __attribute__((aligned(CACHE_LINE_SIZE))) pthread_spinlock_t writers_lock = 0;
 
 __thread unsigned int local_exec_mode = 0;
@@ -80,7 +80,8 @@ int global_num_threads = 0;
 pthread_rwlock_t rw_lock;
 
 void* client(void *data) {
-	TM_THREAD_ENTER();
+    TM_THREAD_ENTER();
+
     // FIXME(nmld): you may call some code to init the worker TM thread here
     //
      local_thread_id = __sync_fetch_and_add( &global_num_threads, 1 );
@@ -96,12 +97,13 @@ void* client(void *data) {
         client->doOne(TM_ARG_ALONE);
 	//printf("Tx executed");
     } while (((clock->getMicroseconds() - begin) / 1000000) < duration_secs);
-	TM_THREAD_EXIT(); 
+
+    TM_THREAD_EXIT();
 }
 
 int main(int argc, char** argv) {
 
-	rw_lock = PTHREAD_RWLOCK_INITIALIZER;
+    rw_lock = PTHREAD_RWLOCK_INITIALIZER;
 
     if (argc < 9) {
         printf("Please provide all the minimum parameters\n");
@@ -117,7 +119,7 @@ int main(int argc, char** argv) {
       {"new order txs ratio",               required_argument, NULL, 'r'},
       {"number warehouses",                 required_argument, NULL, 'w'},
       {"duration in seconds",               required_argument, NULL, 't'},
-      {"number of clients",		            required_argument, NULL, 'n'},
+      {"number of clients",                 required_argument, NULL, 'n'},
       {"workload change",                   required_argument, NULL, 'c'},
       {"maximum number of warehouses",      required_argument, NULL, 'm'},
       {NULL, 0, NULL, 0}
@@ -194,20 +196,22 @@ int main(int argc, char** argv) {
     random->setC(cLoad);
 
 
-	SIM_GET_NUM_CPU(num_clients);
-        TM_STARTUP(num_clients,42);
-        P_MEMORY_STARTUP(num_clients);
-        thread_startup(num_clients);
+    SIM_GET_NUM_CPU(num_clients);
+    TM_STARTUP(num_clients,1);
+    P_MEMORY_STARTUP(num_clients);
+    thread_startup(num_clients);
 
-	TM_THREAD_ENTER();
+    TM_THREAD_ENTER();
 
     // Generate the data
     printf("Loading %ld warehouses... ", num_warehouses);
+    printf("num items: %d\n", Item::NUM_ITEMS);
     fflush(stdout);
+
     char now[Clock::DATETIME_SIZE+1];
     clock->getDateTimestamp(now);
-	printf("num items: %d", Item::NUM_ITEMS);
     int64_t begin = clock->getMicroseconds();
+
     int ro = 1;
     TM_BEGIN(ro);
     local_exec_mode = 2;
@@ -218,6 +222,7 @@ int main(int argc, char** argv) {
         generator.makeWarehouse(TM_ARG tables, i+1);
     }
     TM_END();
+
     int64_t end = clock->getMicroseconds();
     printf("%ld ms\n", (end - begin + 500)/1000);
 
@@ -226,9 +231,9 @@ int main(int argc, char** argv) {
     TPCCClient** clients = (TPCCClient**) malloc(num_clients * sizeof(TPCCClient*));
     pthread_t* threads = (pthread_t*) malloc(num_clients * sizeof(pthread_t));
     for (c = 0; c < num_clients; c++) {
-	 // Change the constants for run
-	 random = new tpcc::RealRandomGenerator();
-	 random->setC(tpcc::NURandC::makeRandomForRun(random, cLoad));
+        // Change the constants for run
+        random = new tpcc::RealRandomGenerator();
+        random->setC(tpcc::NURandC::makeRandomForRun(random, cLoad));
         clients[c] = new TPCCClient(clock, random, tables, Item::NUM_ITEMS, static_cast<int>(num_warehouses),
                 District::NUM_PER_WAREHOUSE, Customer::NUM_PER_DISTRICT);
     }
@@ -269,18 +274,16 @@ int main(int argc, char** argv) {
 
     //TM_STARTUP(num_clients,42);
 
-	TM_THREAD_EXIT();
-P_MEMORY_SHUTDOWN();
-  GOTO_SIM();
-  thread_shutdown();
-//TM_SHUTDOWN();
+    TM_THREAD_EXIT();
+    P_MEMORY_SHUTDOWN();
+    GOTO_SIM();
+    thread_shutdown();
+    //TM_SHUTDOWN();
 
-
-
-SIM_GET_NUM_CPU(num_clients);
-        TM_STARTUP(num_clients,42);
-        P_MEMORY_STARTUP(num_clients);
-        thread_startup(num_clients);
+    SIM_GET_NUM_CPU(num_clients);
+    TM_STARTUP(num_clients,2);
+    P_MEMORY_STARTUP(num_clients);
+    thread_startup(num_clients);
 
     printf("Running... ");
     fflush(stdout);
@@ -290,20 +293,16 @@ SIM_GET_NUM_CPU(num_clients);
     //}
     thread_start(client, clients);
 
-
-
 /*    for (c = 0; c < num_clients; c++) {
     	pthread_join(threads[c], NULL);
     }*/
 
-
     end = clock->getMicroseconds();
     int64_t microseconds = end - begin;
 
-
-  P_MEMORY_SHUTDOWN();
-  GOTO_SIM();
-  thread_shutdown();
+    P_MEMORY_SHUTDOWN();
+    GOTO_SIM();
+    thread_shutdown();
 
     unsigned long executed_stock_level_txs = 0;
     unsigned long executed_delivery_txs = 0;
@@ -334,7 +333,7 @@ SIM_GET_NUM_CPU(num_clients);
     printf("Txs: %ld\n", (long)sum_txs_exec);
     printf("Total time (secs): %.3f\n", (microseconds / 1000000.0));
 
-	TM_SHUTDOWN();
+    TM_SHUTDOWN();
 
     return 0;
 }

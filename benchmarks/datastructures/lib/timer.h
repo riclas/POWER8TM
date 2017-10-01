@@ -84,6 +84,10 @@
     (((double)(stop.tv_sec)  + (double)(stop.tv_usec / 1000000.0)) - \
      ((double)(start.tv_sec) + (double)(start.tv_usec / 1000000.0)))
 
+#define TIMER_DIFF_USEC(start, stop) \
+    (((double)(stop.tv_sec * 1000000.0)  + (double)(stop.tv_usec)) - \
+     ((double)(start.tv_sec * 1000000.0) + (double)(start.tv_usec)))
+
 
 #endif /* TIMER_H */
 

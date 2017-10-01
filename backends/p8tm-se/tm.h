@@ -93,6 +93,41 @@ __TM_is_nontrans_conflict(void* const TM_buff)
   return _TEXASR_NON_TRANSACTIONAL_CONFLICT (texasr);
 }
 
+
+extern __inline long
+__attribute__ ((__gnu_inline__, __always_inline__, __artificial__))
+__TM_is_persistent_abort(void* const TM_buff)
+{
+  texasr_t texasr = *_TEXASR_PTR (TM_buff);
+  return _TEXASR_FAILURE_PERSISTENT (texasr);
+}
+
+extern __inline long
+__attribute__ ((__gnu_inline__, __always_inline__, __artificial__))
+__TM_conflict(void* const TM_buff)
+{
+  texasr_t texasr = *_TEXASR_PTR (TM_buff);
+  /* Return TEXASR bits 11 (Self-Induced Conflict) through
+     14 (Translation Invalidation Conflict).  */
+  return (_TEXASR_EXTRACT_BITS (texasr, 14, 4)) ? 1 : 0;
+}
+
+extern __inline long
+__attribute__ ((__gnu_inline__, __always_inline__, __artificial__))
+__TM_user_abort (void* const TM_buff)
+{
+  texasr_t texasr = *_TEXASR_PTR (TM_buff);
+  return _TEXASR_ABORT (texasr);
+}
+
+extern __inline long
+__attribute__ ((__gnu_inline__, __always_inline__, __artificial__))
+__TM_capacity_abort (void* const TM_buff)
+{
+  texasr_t texasr = *_TEXASR_PTR (TM_buff);
+  return _TEXASR_FOOTPRINT_OVERFLOW (texasr);
+}
+
 extern __inline long
 __attribute__ ((__gnu_inline__, __always_inline__, __artificial__))
 __TM_begin_rot (void* const TM_buff)
@@ -201,7 +236,7 @@ __TM_begin_rot (void* const TM_buff)
 			} \
 			break; \
 		} \
-		else if(__TM_is_conflict(&TM_buff)){ \
+		else if(__TM_conflict(&TM_buff)){ \
 			stats_array[local_thread_id].htm_conflict_aborts ++; \
 			if(__TM_is_self_conflict(&TM_buff)) {stats_array[local_thread_id].htm_self_conflicts++; }\
 			else if(__TM_is_trans_conflict(&TM_buff)) stats_array[local_thread_id].htm_trans_conflicts++; \
@@ -218,15 +253,15 @@ __TM_begin_rot (void* const TM_buff)
 			if (backoff < MAX_BACKOFF) \
 				backoff <<=1 ; \
 		} \
-		else if (__TM_is_user_abort(&TM_buff)) { \
+		else if (__TM_user_abort(&TM_buff)) { \
 			stats_array[local_thread_id].htm_user_aborts ++; \
                         htm_status = 0; \
                         htm_budget--; \
                 } \
-		else if(__TM_is_footprint_exceeded(&TM_buff)){ \
+		else if(__TM_capacity_abort(&TM_buff)){ \
 			htm_status = 0; \
 			stats_array[local_thread_id].htm_capacity_aborts ++; \
-			if(__TM_is_failure_persistent(&TM_buff)) stats_array[local_thread_id].htm_persistent_aborts ++; \
+			if(__TM_persistent_abort(&TM_buff)) stats_array[local_thread_id].htm_persistent_aborts ++; \
 			break; \
 		} \
 		else{ \
@@ -286,7 +321,7 @@ static __inline__ unsigned long long rdtsc(void)
 		if (tx_status == _HTM_TBEGIN_STARTED) { \
                         break; \
                 } \
-		else if(__TM_is_conflict(&TM_buff)){ \
+		else if(__TM_conflict(&TM_buff)){ \
                         stats_array[local_thread_id].rot_conflict_aborts ++; \
 			if(__TM_is_self_conflict(&TM_buff)) stats_array[local_thread_id].rot_self_conflicts++; \
 			else if(__TM_is_trans_conflict(&TM_buff)) stats_array[local_thread_id].rot_trans_conflicts++; \
@@ -309,15 +344,15 @@ static __inline__ unsigned long long rdtsc(void)
                         if (backoff < MAX_BACKOFF) \
                                 backoff <<= 1; \
                 } \
-                else if (__TM_is_user_abort(&TM_buff)) { \
+                else if (__TM_user_abort(&TM_buff)) { \
                         stats_array[local_thread_id].rot_user_aborts ++; \
                         rot_status = 0; \
                         rot_budget--; \
                 } \
-                else if(__TM_is_footprint_exceeded(&TM_buff)){ \
+                else if(__TM_capacity_abort(&TM_buff)){ \
 			rot_status = 0; \
 			stats_array[local_thread_id].rot_capacity_aborts ++; \
-			if(__TM_is_failure_persistent(&TM_buff)) stats_array[local_thread_id].rot_persistent_aborts ++; \
+			if(__TM_persistent_abort(&TM_buff)) stats_array[local_thread_id].rot_persistent_aborts ++; \
                         break; \
 		} \
                 else{ \

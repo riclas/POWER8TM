@@ -12,10 +12,12 @@ backend=$1  # e.g.: herwl
 
 htm_retries=5
 rot_retries=2
+wait_ratio=1
 
-if [ $# -eq 3 ] ; then
+if [ $# -eq 4 ] ; then
     htm_retries=$2 # e.g.: 5
     rot_retries=$3 # e.g.: 2, this can also be retry policy for tle
+    wait_ratio=$4  # between 0 and 1
 fi
 
 rm lib/*.o || true
@@ -44,7 +46,7 @@ do
 	if [[ $backend == htm-sgl || $backend == hybrid-norec ]] ; then
 		make_command="make -f Makefile HTM_RETRIES=-DHTM_RETRIES=$htm_retries RETRY_POLICY=-DRETRY_POLICY=$rot_retries"
 	else
-        	make_command="make -f Makefile HTM_RETRIES=-DHTM_RETRIES=$htm_retries ROT_RETRIES=-DROT_RETRIES=$rot_retries"
+        	make_command="make -f Makefile HTM_RETRIES=-DHTM_RETRIES=$htm_retries ROT_RETRIES=-DROT_RETRIES=$rot_retries WAIT_RATIO=-DWAIT_RATIO=$wait_ratio"
 	fi
         $make_command
     rc=$?

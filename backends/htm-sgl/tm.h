@@ -86,6 +86,39 @@ __TM_is_nontrans_conflict(void* const TM_buff)
   return _TEXASR_NON_TRANSACTIONAL_CONFLICT (texasr);
 }
 
+extern __inline long
+__attribute__ ((__gnu_inline__, __always_inline__, __artificial__))
+__TM_is_persistent_abort(void* const TM_buff)
+{
+  texasr_t texasr = *_TEXASR_PTR (TM_buff);
+  return _TEXASR_FAILURE_PERSISTENT (texasr);
+}
+
+extern __inline long
+__attribute__ ((__gnu_inline__, __always_inline__, __artificial__))
+__TM_conflict(void* const TM_buff)
+{
+  texasr_t texasr = *_TEXASR_PTR (TM_buff);
+  /* Return TEXASR bits 11 (Self-Induced Conflict) through
+     14 (Translation Invalidation Conflict).  */
+  return (_TEXASR_EXTRACT_BITS (texasr, 14, 4)) ? 1 : 0;
+}
+
+extern __inline long
+__attribute__ ((__gnu_inline__, __always_inline__, __artificial__))
+__TM_user_abort (void* const TM_buff)
+{
+  texasr_t texasr = *_TEXASR_PTR (TM_buff);
+  return _TEXASR_ABORT (texasr);
+}
+
+extern __inline long
+__attribute__ ((__gnu_inline__, __always_inline__, __artificial__))
+__TM_capacity_abort (void* const TM_buff)
+{
+  texasr_t texasr = *_TEXASR_PTR (TM_buff);
+  return _TEXASR_FOOTPRINT_OVERFLOW (texasr);
+}
 
 #  define TM_STARTUP(numThread, bId)
 #  define TM_SHUTDOWN() { \
@@ -119,10 +152,11 @@ __TM_is_nontrans_conflict(void* const TM_buff)
 #  define TM_THREAD_ENTER()
 #  define TM_THREAD_EXIT()
 
-# define IS_LOCKED(lock)        *((volatile int*)(&lock)) != 0
+# define IS_LOCKED(lock)        *((volatile long*)(&lock)) != 0
 
 # define TM_BEGIN(b) TM_BEGIN_EXT(b,0)
 # define SPEND_BUDGET(b)	if(RETRY_POLICY == 0) (*b)=0; else if (RETRY_POLICY == 2) (*b)=(*b)/2; else (*b)=--(*b);
+
 
 # define TM_BEGIN_EXT(b,ro) { \
         int tle_budget = HTM_RETRIES; \
@@ -142,11 +176,11 @@ __TM_is_nontrans_conflict(void* const TM_buff)
             	break; \
             } \
 	    else{ \
-		if(__TM_is_failure_persistent(&TM_buff)){ \
+		if(__TM_is_persistent_abort(&TM_buff)){ \
 			 SPEND_BUDGET(&tle_budget); \
 			 stats_array[local_thread_id].persistent++; \
 		} \
-		if(__TM_is_conflict(&TM_buff)){ \
+		if(__TM_conflict(&TM_buff)){ \
                         stats_array[local_thread_id].conflicts++; \
                         if(__TM_is_self_conflict(&TM_buff)) {stats_array[local_thread_id].self++; }\
                         else if(__TM_is_trans_conflict(&TM_buff)) stats_array[local_thread_id].trans++; \
@@ -162,11 +196,11 @@ __TM_is_nontrans_conflict(void* const TM_buff)
                         if (backoff < MAX_BACKOFF) \
                                 backoff <<= 1; \
                 } \
-                else if (__TM_is_user_abort(&TM_buff)) { \
+                else if (__TM_user_abort(&TM_buff)) { \
                         stats_array[local_thread_id].user++; \
                         tle_budget--; \
                 } \
-                else if(__TM_is_footprint_exceeded(&TM_buff)){ \
+                else if(__TM_capacity_abort(&TM_buff)){ \
                         stats_array[local_thread_id].capacity++; \
 			SPEND_BUDGET(&tle_budget); \
                 } \
