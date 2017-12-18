@@ -318,16 +318,18 @@ __TM_begin_rot (void* const TM_buff)
         padded_scalar start_wait_time; \
         READ_TIMESTAMP(start_wait_time.value); \
 	for(kill_index=0; kill_index < num_threads; kill_index++){ \
-            if(counters[kill_index].value != INACTIVE) { \
+	    padded_scalar temp; \
+            temp.value = counters[kill_index].value; \
+            if(temp.value != INACTIVE) { \
                 padded_scalar wait_needed; \
-		wait_needed.value = counters[kill_index].value - end_time.value; \
+		wait_needed.value = temp.value - end_time.value; \
                 if(wait_needed.value > 0) { \
                     kill_index2 = wait_needed.value/1; \
                     if(kill_index2 > num_threads - 1){ \
                         actions[num_threads][to_save[num_threads]++] = kill_index; \
                     } else { \
                         actions[kill_index2][to_save[kill_index2]++] = kill_index; \
-                        counters_snapshot[kill_index] = counters[kill_index].value; \
+                        counters_snapshot[kill_index] = temp.value; \
                     } \
                 } else { \
                     actions[0][to_save[0]++] = kill_index; \
@@ -353,7 +355,7 @@ __TM_begin_rot (void* const TM_buff)
                 } \
             } else { \
                 for(kill_index2=0; kill_index2 < to_save[kill_index]; kill_index2++){ \
-			printf("%d %d \n",counters_snapshot[actions[kill_index][kill_index2]], counters[actions[kill_index][kill_index2]].value); \
+			/*printf("%d %d \n",counters_snapshot[actions[kill_index][kill_index2]], counters[actions[kill_index][kill_index2]].value); \
                     /*printf("commits %d kill_index %d x %d to_save %d aa %d\n",stats_array[local_thread_id].rot_commits,kill_index, kill_index2, to_save[kill_index], actions[kill_index][kill_index2]);*/ \
                     while(counters_snapshot[actions[kill_index][kill_index2]] == counters[actions[kill_index][kill_index2]].value){ \
                         cpu_relax(); \
