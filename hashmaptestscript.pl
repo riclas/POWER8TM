@@ -28,7 +28,7 @@ use Cwd;
 # Names of the STM algorithms that we want to test.  Note that you must
 # consider semantics yourself... our policies don't add that support after
 # the fact.  So in this case, we're using 'no semantics'
-@Algs = ("p8tm-si"#,"p8tm-si","htm-sgl"
+@Algs = ("p8tm-si 0"#,"p8tm-si","htm-sgl"
         #,"NOrecHTBOT SPEC_TXS=2"#("NOrec", "NOrecno", "NOrecHTBOT SPEC_TXS=1", "NOrecHTBOT SPEC_TXS=2", "NOrecHTBOT SPEC_TXS=4" #("LLT", "Swiss", "NOrec");#, "NOrecHT SPEC_TXS=1", "NOrecHT SPEC_TXS=2", "NOrecHT SPEC_TXS=4", "NOrecHTBOT SPEC_TXS=1", "NOrecHTBOT SPEC_TXS=2", "NOrecHTBOT SPEC_TXS=4", NOrecHTO);
         #,"NOrecHTBOT SPEC_TXS=1 WPH=2", "NOrecHTBOT SPEC_TXS=2 WPH=2", "NOrecHTBOT SPEC_TXS=4 WPH=2"
         #,"NOrecHTBOT SPEC_TXS=1 WPH=3", "NOrecHTBOT SPEC_TXS=2 WPH=3", "NOrecHTBOT SPEC_TXS=4 WPH=3"
@@ -88,7 +88,7 @@ foreach $b (@Benches) {
     #$cbrline =~ s/ #//g;
 
     chdir("${ExePath}");
-
+for($r=0; $r <=0; $r++){
     # now for each thread
     for ($p = 1; $p <= $MaxThreadCount; $p+=1) {
         print "Testing at $p thread(s): ";
@@ -99,7 +99,7 @@ foreach $b (@Benches) {
         foreach $a (@Algs) {
             for($w = 1; $w <= 1; $w+=0.25){
                 print "\nTesting $a with wait ratio $w\n";
-                `sh build-datastructures.sh $a 0 2 $w`;
+                `sh build-datastructures.sh $a 20 $w`;
 
                 # run a few trials, get the average
                 $valtime = 0;
@@ -188,5 +188,5 @@ foreach $b (@Benches) {
         `cd ~`;
     }
 }
-
+}
 close(QTABLE);

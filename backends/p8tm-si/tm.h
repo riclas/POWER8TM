@@ -43,7 +43,7 @@
 #  define P_FREE(ptr)                   free(ptr)
 #  define TM_MALLOC(size)               malloc(size)
 #  define FAST_PATH_FREE(ptr)           free(ptr)
-#  define SLOW_PATH_FREE(ptr)             free(ptr)
+#  define SLOW_PATH_FREE(ptr)           free(ptr)
 
 # define SETUP_NUMBER_TASKS(n)
 # define SETUP_NUMBER_THREADS(n)
@@ -62,8 +62,7 @@
 #    define SPECIAL_THREAD_ID()         thread_getId()
 #endif
 
-//#  include <immintrin.h>
-//#  include <rtmintrin.h>
+
 #include <htmxlintrin.h>
 
 extern __inline long
@@ -217,7 +216,7 @@ __TM_begin_rot (void* const TM_buff)
        \tROT other aborts:  %lu\n", total_time, wait_time, read_commits+htm_commits+rot_commits+gl_commits, read_commits, htm_commits, rot_commits, gl_commits,htm_conflict_aborts+htm_user_aborts+htm_capacity_aborts+htm_other_aborts+rot_conflict_aborts+rot_user_aborts+rot_capacity_aborts+rot_other_aborts,htm_conflict_aborts,htm_self_conflicts,htm_trans_conflicts,htm_nontrans_conflicts,htm_user_aborts,htm_capacity_aborts,htm_persistent_aborts,htm_other_aborts,rot_conflict_aborts,rot_self_conflicts,rot_trans_conflicts,rot_nontrans_conflicts,rot_user_aborts,rot_capacity_aborts,rot_persistent_aborts,rot_other_aborts); \
 } \
 
-#  define TM_THREAD_ENTER()	//rot_readset = (long*)malloc(sizeof(long)*100000);
+#  define TM_THREAD_ENTER()
 #  define TM_THREAD_EXIT()
 
 # define IS_LOCKED(lock)        *((volatile int*)(&lock)) != 0
@@ -225,6 +224,8 @@ __TM_begin_rot (void* const TM_buff)
 # define IS_GLOBAL_LOCKED(lock)        *((volatile int*)(&lock)) == 2
 
 # define TM_BEGIN(ro) TM_BEGIN_EXT(0,ro)
+
+# define READ_TIMESTAMP(dest) __asm__ volatile("0:                  \n\tmfspr   %0,268           \n": "=r"(dest));
 
 # define ACQUIRE_READ_LOCK() { \
 	while(1){ \
@@ -244,80 +245,6 @@ __TM_begin_rot (void* const TM_buff)
 
 # define RELEASE_READ_LOCK() counters[local_thread_id].value+=7; stats_array[local_thread_id].read_commits++;
 
-# define USE_HTM(){ \
-	int htm_budget = HTM_RETRIES; \
-	while(htm_budget > 0){ \
-		htm_status = 1; \
-		TM_buff_type TM_buff; \	
-		while(IS_LOCKED(single_global_lock)){ \
-                        cpu_relax(); \
-                } \
-		unsigned char tx_status = __TM_begin(&TM_buff); \
-		if (tx_status == _HTM_TBEGIN_STARTED) { \
-			if(IS_LOCKED(single_global_lock)){ \
-				__TM_abort(); \
-			} \
-			break; \
-		} \
-		else if(__TM_conflict(&TM_buff)){ \
-			stats_array[local_thread_id].htm_conflict_aborts ++; \
-			if(__TM_is_self_conflict(&TM_buff)) {stats_array[local_thread_id].htm_self_conflicts++; }\
-			else if(__TM_is_trans_conflict(&TM_buff)) stats_array[local_thread_id].htm_trans_conflicts++; \
-                        else if(__TM_is_nontrans_conflict(&TM_buff)) stats_array[local_thread_id].htm_nontrans_conflicts++; \
-                        htm_status = 0; \
-                        htm_budget--; \
-			/*unsigned long wait; \
-			volatile int j; \
-			cm_seed ^= (cm_seed << 17); \
-			cm_seed ^= (cm_seed >> 13); \
-			cm_seed ^= (cm_seed << 5); \
-			ait = cm_seed % backoff; \
-			for (j = 0; j < wait; j++); \
-			if (backoff < MAX_BACKOFF) \
-				backoff <<=1 ;*/ \
-		} \
-		else if (__TM_user_abort(&TM_buff)) { \
-			stats_array[local_thread_id].htm_user_aborts ++; \
-                        htm_status = 0; \
-                        htm_budget--; \
-                } \
-		else if(__TM_capacity_abort(&TM_buff)){ \
-			htm_status = 0; \
-			stats_array[local_thread_id].htm_capacity_aborts ++; \
-			if(__TM_is_persistent_abort(&TM_buff)) stats_array[local_thread_id].htm_persistent_aborts ++; \
-			break; \
-		} \
-		else{ \
-			stats_array[local_thread_id].htm_other_aborts ++; \
-			htm_status = 0; \
-			htm_budget--; \
-		} \
-	} \
-};
-
-
-static __inline__ unsigned long long rdtsc(void)
-{ 
-  unsigned long long int result=0;
-  unsigned long int upper, lower,tmp;
-  __asm__ volatile(
-                "0:                  \n"
-                "\tmftbu   %0           \n"
-                "\tmftb    %1           \n"
-                "\tmftbu   %2           \n"
-                "\tcmpw    %2,%0        \n"
-                "\tbne     0b         \n"
-                : "=r"(upper),"=r"(lower),"=r"(tmp)
-                );
-  result = upper;
-  result = result<<32;
-  result = result|lower;
-  
-  return(result);
-}
-
-# define READ_TIMESTAMP(dest) __asm__ volatile("0:                  \n\tmfspr   %0,268           \n": "=r"(dest));
-
 # define USE_ROT(){ \
 	int rot_budget = ROT_RETRIES; \
 	while(IS_LOCKED(single_global_lock)){ \
@@ -326,39 +253,25 @@ static __inline__ unsigned long long rdtsc(void)
 	while(rot_budget > 0){ \
 		rot_status = 1; \
 		TM_buff_type TM_buff; \
-		int state = counters[local_thread_id].value & 7; \
+		int state = counters[local_thread_id].value & 7; /*uses 3 bytes, even value for inactive rots, odd value for active rots*/ \
 		if (!state) \
-			counters[local_thread_id].value += 3; \
+			counters[local_thread_id].value += 3; /*=3 active rot*/ \
                 else if(state == 7) \
                         counters[local_thread_id].value += 4;\
 		else if(state == 3) \
                         counters[local_thread_id].value += 8;\
 		rmb(); \
 		if(IS_LOCKED(single_global_lock)){ \
-			counters[local_thread_id].value += 5; \
+			counters[local_thread_id].value += 5; /*inactive rot*/ \
 			rmb(); \
 			while(IS_LOCKED(single_global_lock)) cpu_relax(); \
 			continue; \
 		} \
-                /*rot_readset = (readset_t *)malloc(sizeof(readset_t)); \
-                readset_item_t *item = (readset_item_t *)malloc(sizeof(readset_item_t)); \
-                item->addr = -1; \
-                item->next = NULL; \
-                rot_readset->head = item; */\
-		rs_counter = 0; \
-		/*printf("thread %d starting ROT with counters %d and rot counters %d\n",local_thread_id,counters[local_thread_id].value,rot_counters[local_thread_id].value); */\
 		unsigned char tx_status = __TM_begin_rot(&TM_buff); \
 		if (tx_status == _HTM_TBEGIN_STARTED) { \
-			/*rot_counters[local_thread_id].value ++; */\			
-			/*begin_rot = rdtsc(); */\
-                        /*if(IS_LOCKED(single_global_lock)){ \
-                                __TM_abort(); \
-                        } \
-			single_global_lock = single_global_lock;*/\
                         break; \
                 } \
 		else if(__TM_conflict(&TM_buff)){ \
-			/*printf("conflict: %p\n",__TM_failure_address(&TM_buff)); */\
                         stats_array[local_thread_id].rot_conflict_aborts ++; \
 			if(__TM_is_self_conflict(&TM_buff)) stats_array[local_thread_id].rot_self_conflicts++; \
 			else if(__TM_is_trans_conflict(&TM_buff)) stats_array[local_thread_id].rot_trans_conflicts++; \
@@ -367,19 +280,10 @@ static __inline__ unsigned long long rdtsc(void)
                         rot_budget--; \
 			state = counters[local_thread_id].value & 7; \
                 	if(state == 7) \
-                        	counters[local_thread_id].value ++;\
+                        	counters[local_thread_id].value ++; /*=8 inactive rot*/ \
                 	else if(state == 3) \
-                        	counters[local_thread_id].value += 5;\
+                        	counters[local_thread_id].value += 5; /*=8 inactive rot*/ \
                 	rmb(); \
-                        /*unsigned long wait; \
-                        volatile int j; \
-                        cm_seed ^= (cm_seed << 17); \
-                        cm_seed ^= (cm_seed >> 13); \
-                        cm_seed ^= (cm_seed << 5); \
-                        wait = cm_seed % backoff; \
-                        for (j = 0; j < wait; j++); \
-                        if (backoff < MAX_BACKOFF) \
-                                backoff <<= 1; */\
                 } \
                 else if (__TM_user_abort(&TM_buff)) { \
                         stats_array[local_thread_id].rot_user_aborts ++; \
@@ -407,33 +311,18 @@ static __inline__ unsigned long long rdtsc(void)
 	while (pthread_spin_trylock(&single_global_lock) != 0) { \
                     __asm volatile ("" : : : "memory"); \
         } \
-	/*while(1){ \
-                while(IS_LOCKED(single_global_lock)){ \
-                        cpu_relax(); \
-                } \
-                if(pthread_spin_trylock(&single_global_lock) == 0){ \
-                        break; \
-                } \
-        } */\
 	QUIESCENCE_CALL_GL(); \
 };
 
 # define ACQUIRE_WRITE_LOCK() { \
-	/*while(IS_LOCKED(single_global_lock)){ \
-		cpu_relax(); \
+	local_exec_mode = 1; \
+	int rot_status = 0; \
+	USE_ROT(); \
+	if(!rot_status){ \
+		local_exec_mode = 2; \
+		ACQUIRE_GLOBAL_LOCK(); \
 	} \
-	int htm_status = 0; \
-	USE_HTM(); \
-	if(!htm_status){ */\
-		local_exec_mode = 1; \
-		int rot_status = 0; \
-		USE_ROT(); \
-		if(!rot_status){ \
-			local_exec_mode = 2; \
-			ACQUIRE_GLOBAL_LOCK(); \
-		} \
-		/*triggers[local_thread_id].value = 1;*/ \
-	/*} */\
+	/*triggers[local_thread_id].value = 1;*/ \
 };\
 
 # define QUIESCENCE_CALL_ROT(){ \
@@ -462,27 +351,14 @@ static __inline__ unsigned long long rdtsc(void)
 				break;\
 		} \
         } \
-	/*counters_snapshot[local_thread_id] =  0;*/ \
-	/*TOUCH_REVALIDATION();*/ \
-	/*__TM_suspend(); \
-        counters[local_thread_id].value += 4; \
-        rmb(); \
-         __TM_resume(); */\
 	long start_wait_time; \
 	READ_TIMESTAMP(start_wait_time); \
 	/*long waited_threads = 0, waited = 0; */\
 	for(index=0; index < num_threads; index++){ \
 		if(counters_snapshot[index] != 0){ \
 			while(counters[index].value == counters_snapshot[index]){ \
-				/*if(waited_threads >= num_threads*WAIT_RATIO){*/ \
-					void* temp = triggers[index].value; \
-					/*break; \
-				/*} else { \
-					waited = 1; \
-					cpu_relax(); \
-				/*}*/ \
+				cpu_relax(); \
 			} \
-			/*waited_threads += waited; */\
 		} \
 	} \
         long end_wait_time; \
@@ -502,7 +378,7 @@ static __inline__ unsigned long long rdtsc(void)
                         counters_snapshot[index] = temp; \
                 }\
                 else{ \
-                        counters_snapshot[index] = 0; \ 
+                        counters_snapshot[index] = 0; \
                 } \
         } \
         for(index=0; index < 80; index++){ \
@@ -515,23 +391,7 @@ static __inline__ unsigned long long rdtsc(void)
         } \
 };
 
-# define QUIESCENCE_CALL_SINGLE(){ \
-	int num_threads = global_numThread; \
-        int index;\
-        register long temp; \
-        for(index=0; index < num_threads; index++){ \
-                temp = counters[index].value; \
-                if(temp & 1){ \
-			while(temp == counters[index].value) \
-                        cpu_relax(); \
-                }\
-        } \
-};
-
 # define QUIESCENCE_CALL_GL(){ \
-        /*__attribute__((aligned(CACHE_LINE_SIZE))) padded_scalar_t num_threads; \
-        num_threads.value = global_numThread; \
-        __attribute__((aligned(CACHE_LINE_SIZE))) padded_scalar_t index; */ \
 	int index;\
 	int num_threads = global_numThread; \
         for(index=0; index < num_threads; index++){ \
@@ -541,52 +401,17 @@ static __inline__ unsigned long long rdtsc(void)
         } \
 };
 
-
-# define TOUCH_REVALIDATION(){ \
-        intptr_t temp; \
-        int index; \
-        for(index=0;index<rs_counter;index++){ \
-		if(rot_readset[index]){ \
-	                temp = *(intptr_t *)rot_readset[index]; \
-			/*if(temp) \
-				rot_readset_values[index] = (long)temp; */\
-		} \
-		/*if(rot_readset->head->type) \
-			temp = rot_readset->head->addr_p; \
-		else{ \
-			if (rot_readset->head->addr == -1) \
-				break; \
-			temp = *rot_readset->head->addr; \
-		} */\
-		/*printf("read set has entry %d\n",*rot_readset->head->addr);*/\
-		/*rot_readset->head = rot_readset->head->next; */\
-	} \
-};
-
 # define RELEASE_WRITE_LOCK(){ \
-	if(!local_exec_mode){ \
-		__TM_suspend(); \
-		QUIESCENCE_CALL_SINGLE();\
-		__TM_resume(); \
-		__TM_end(); \
-		/*printf("thread %d committed in HTM with counters %lu\n",local_thread_id,counters[local_thread_id].value); */\
-		stats_array[local_thread_id].htm_commits++; \
-	} \
-	else if(local_exec_mode == 1){ \
-		/*unsigned long long int length = rdtsc() -begin_rot ; */\
+	if(local_exec_mode == 1){ \
 	        __TM_suspend(); \
-	        counters[local_thread_id].value += 4; \
+	        counters[local_thread_id].value += 4; /*=7 committing rot*/ \
         	rmb(); \
 	         __TM_resume(); \
 		QUIESCENCE_CALL_ROT(); \
-                /*TOUCH_REVALIDATION(); */\
 		__TM_end(); \
-		counters[local_thread_id].value+=1; \
-        	/*rmb(); \
-		printf("rscounter\t%d\n",rs_counter); */\
+		counters[local_thread_id].value+=1; /*=8 inactive rot*/ \
 		/*printf("thread %d committed in ROT with counters %lu and rot_counters %d\n",local_thread_id,counters[local_thread_id].value,rot_counters[local_thread_id].value); */\
 		stats_array[local_thread_id].rot_commits++; \
-		/*printf("length of tx is: %lu\n",rs_counter); */\
 	} \
 	else{ \
 		pthread_spin_unlock(&single_global_lock); \
@@ -597,12 +422,9 @@ static __inline__ unsigned long long rdtsc(void)
 };
 
 # define TM_BEGIN_EXT(b,ro) {  \
-	/*unsigned long long int begin_rot; */\
 	local_exec_mode = 0; \
 	rs_counter = 0; \
 	local_thread_id = SPECIAL_THREAD_ID();\
-	backoff = MIN_BACKOFF; \
-        /*TIMER_READ(start_time);*/ \
 	if(ro){ \
 		ACQUIRE_READ_LOCK(); \
 	} \
@@ -618,9 +440,6 @@ static __inline__ unsigned long long rdtsc(void)
 	else{ \
 		RELEASE_WRITE_LOCK(); \
 	} \
-	/*TIMER_T end_time; \
-        TIMER_READ(end_time); \
-        stats_array[local_thread_id].total_time += TIMER_DIFF_USEC(start_time, end_time); */\
 };
 
 #    define TM_BEGIN_RO()                 TM_BEGIN(1)
@@ -629,24 +448,19 @@ static __inline__ unsigned long long rdtsc(void)
 
 # define FAST_PATH_RESTART() __TM_abort();
 
-#define SLOW_PATH_SHARED_READ(var)             var; //rot_readset[rs_counter++] = &var;
-#define SLOW_PATH_SHARED_READ_P(var)           var; //rot_readset[rs_counter++] = var;
-#define SLOW_PATH_SHARED_READ_D(var)           var; //rot_readset[rs_counter++] = &var;
-//#define SLOW_PATH_SHARED_READ_P(var)           var;
+#define SLOW_PATH_SHARED_READ(var)             var;
+#define SLOW_PATH_SHARED_READ_P(var)           var;
+#define SLOW_PATH_SHARED_READ_D(var)           var;
 
 #define FAST_PATH_SHARED_READ(var)                 var
-#define FAST_PATH_SHARED_READ_P(var)                  var
-#define FAST_PATH_SHARED_READ_D(var)                   var
+#define FAST_PATH_SHARED_READ_P(var)               var
+#define FAST_PATH_SHARED_READ_D(var)               var
 
 # define FAST_PATH_SHARED_WRITE(var, val) ({var = val; var;})
 # define FAST_PATH_SHARED_WRITE_P(var, val) ({var = val; var;})
 # define FAST_PATH_SHARED_WRITE_D(var, val) ({var = val; var;})
 
 # define SLOW_PATH_RESTART() FAST_PATH_RESTART()
-//# define SLOW_PATH_SHARED_READ(var)           FAST_PATH_SHARED_READ(var)
-//# define SLOW_PATH_SHARED_READ_P(var)         FAST_PATH_SHARED_READ_P(var)
-//# define SLOW_PATH_SHARED_READ_F(var)         FAST_PATH_SHARED_READ_D(var)
-//# define SLOW_PATH_SHARED_READ_D(var)         FAST_PATH_SHARED_READ_D(var)
 # define SLOW_PATH_SHARED_WRITE(var, val)     FAST_PATH_SHARED_WRITE(var, val)
 # define SLOW_PATH_SHARED_WRITE_P(var, val)   FAST_PATH_SHARED_WRITE_P(var, val)
 # define SLOW_PATH_SHARED_WRITE_D(var, val)   FAST_PATH_SHARED_WRITE_D(var, val)

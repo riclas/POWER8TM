@@ -240,6 +240,9 @@ __TM_begin_rot (void* const TM_buff)
 		TM_buff_type TM_buff; \
                 long start_time; \
 		READ_TIMESTAMP(start_time); \
+		memset(counters_snapshot, 0, sizeof(counters_snapshot)); \
+                memset(actions, 0, sizeof(actions)); \
+                memset(to_save, 0, sizeof(to_save)); \
                 counters[local_thread_id].value = start_time + tx_length[b_type].value; \
 		rmb(); \
 		if(IS_LOCKED(single_global_lock)){ \
@@ -254,7 +257,7 @@ __TM_begin_rot (void* const TM_buff)
                         break; \
                 } \
 		else if(__TM_conflict(&TM_buff)){ \
-                        stats_array[local_thread_id].rot_conflict_aborts ++; \
+                        stats_array[local_thread_id].rot_conflict_aborts++; \
 			if(__TM_is_self_conflict(&TM_buff)) stats_array[local_thread_id].rot_self_conflicts++; \
 			else if(__TM_is_trans_conflict(&TM_buff)) stats_array[local_thread_id].rot_trans_conflicts++; \
 			else if(__TM_is_nontrans_conflict(&TM_buff)) stats_array[local_thread_id].rot_nontrans_conflicts++; \
@@ -302,66 +305,70 @@ __TM_begin_rot (void* const TM_buff)
 };\
 
 # define QUIESCENCE_CALL_ROT(){ \
- 	long num_threads = global_numThread; \
-	long index;\
-	int state;\
-	volatile long temp; \
-	long counters_snapshot[80]={0}; \
+/* 	padded_scalar num_threads; \
+	num_threads.value = global_numThread; \
+	padded_scalar kill_index; \
+	padded_scalar state; \
         long actions[81][81]={0}; \
-        long toSave[81]={0}; \
+        long to_save[81]={0};*/ \
+        /*long state = 0; \
         long x = 0; \
-        long ignored = 0; \
-        long start_wait_time; \
-        READ_TIMESTAMP(start_wait_time); \
-	for(index=0; index < num_threads; index++){ \
-            if(counters[index].value != INACTIVE) { \
-                long wait_needed = counters[index].value - end_time; \
-                if(wait_needed > 0) { \
-                    x = wait_needed/alpha; \
-                    if(x > num_threads - 1){ \
-                        actions[num_threads][toSave[num_threads]++] = index; \
+        padded_scalar kill_ignored;*/ \
+	kill_ignored=0; \
+        padded_scalar start_wait_time; \
+        READ_TIMESTAMP(start_wait_time.value); \
+	for(kill_index=0; kill_index < num_threads; kill_index++){ \
+            if(counters[kill_index].value != INACTIVE) { \
+                padded_scalar wait_needed; \
+		wait_needed.value = counters[kill_index].value - end_time.value; \
+                if(wait_needed.value > 0) { \
+                    kill_index2 = wait_needed.value/1; \
+                    if(kill_index2 > num_threads - 1){ \
+                        actions[num_threads][to_save[num_threads]++] = kill_index; \
                     } else { \
-                        actions[x][toSave[x]++] = index; \
-                        counters_snapshot[index] = counters[index].value; \
+                        actions[kill_index2][to_save[kill_index2]++] = kill_index; \
+                        counters_snapshot[kill_index] = counters[kill_index].value; \
                     } \
                 } else { \
-                    actions[0][toSave[0]++] = index; \
+                    actions[0][to_save[0]++] = kill_index; \
                 } \
             } else { \
-                ignored++; \
+                kill_ignored++; \
             } \
         } \
-        long canSave = 0; \
-        long acc = 0; \
-	for(index=0; index < num_threads; index++){ \
-            acc = acc + toSave[index]; \
-            if(acc >= index) \
-                canSave = index; \
-            if(num_threads - 1 - ignored - acc - toSave[num_threads] < index){ \
+        kill_cansave = 0; \
+        kill_acc = 0; \
+	for(kill_index=0; kill_index < num_threads; kill_index++){ \
+            kill_acc = kill_acc + to_save[kill_index]; \
+            if(kill_acc >= kill_index) \
+                kill_cansave = kill_index; \
+            if(num_threads - 1 - kill_ignored - kill_acc - to_save[num_threads] < kill_index){ \
                 break; \
             } \
         } \
-	for(index=num_threads-1; index >= 0; index--){ \
-            if(index > canSave){ \
-                for(x=0; x < toSave[index]; x++){ \
-                    void* temp = triggers[actions[index][x]].value; /*kill the transaction */ \
+	for(kill_index=num_threads-1; kill_index >= 0; kill_index--){ \
+            if(kill_index > kill_cansave){ \
+                for(kill_index2=0; kill_index2 < to_save[kill_index]; kill_index2++){ \
+                    void* temp = triggers[actions[kill_index][kill_index2]].value; /*kill the transaction*/ \
                 } \
             } else { \
-                for(x=0; x < toSave[index]; x++){ \
-/*printf("commits %d index %d x %d tosave %d aa %d\n",stats_array[local_thread_id].rot_commits,index, x, toSave[index], actions[index][x]);   */                 while(counters_snapshot[actions[index][x]] == counters[actions[index][x]].value){ \
+                for(kill_index2=0; kill_index2 < to_save[kill_index]; kill_index2++){ \
+			printf("%d %d \n",counters_snapshot[actions[kill_index][kill_index2]], counters[actions[kill_index][kill_index2]].value); \
+                    /*printf("commits %d kill_index %d x %d to_save %d aa %d\n",stats_array[local_thread_id].rot_commits,kill_index, kill_index2, to_save[kill_index], actions[kill_index][kill_index2]);*/ \
+                    while(counters_snapshot[actions[kill_index][kill_index2]] == counters[actions[kill_index][kill_index2]].value){ \
                         cpu_relax(); \
                     } \
                 } \
             } \
         } \
-        long end_wait_time; \
-       	READ_TIMESTAMP(end_wait_time); \
-       	stats_array[local_thread_id].wait_time += end_wait_time - start_wait_time; \
+        padded_scalar end_wait_time; \
+       	READ_TIMESTAMP(end_wait_time.value); \
+       	stats_array[local_thread_id].wait_time += end_wait_time.value - start_wait_time.value; \
 };
 
 # define QUIESCENCE_CALL_GL(){ \
-        for(int index=0; index < global_numThread; index++){ \
-            while(counters[index].value){ \
+        for(int kill_index=0; kill_index < global_numThread; kill_index++){ \
+            while(counters[kill_index].value){ \
                 cpu_relax(); \
             } \
         } \
@@ -371,10 +378,10 @@ __TM_begin_rot (void* const TM_buff)
 	if(local_exec_mode == 1){ \
 	        __TM_suspend(); \
                 counters[local_thread_id].value = INACTIVE; \
-		long end_time; \
-                READ_TIMESTAMP(end_time); \
+		padded_scalar end_time; \
+                READ_TIMESTAMP(end_time.value); \
                 if(local_thread_id == 0){ \
-                    tx_length[b_type].value = tx_length[b_type].value*0.8 + (counters[local_thread_id].value - tx_length[b_type].value - end_time)*0.2; \
+                    tx_length[b_type].value = tx_length[b_type].value*0.8 + (counters[local_thread_id].value - tx_length[b_type].value - end_time.value)*0.2; \
                 } \
                 QUIESCENCE_CALL_ROT(); \
 	        __TM_resume(); \
@@ -392,9 +399,10 @@ __TM_begin_rot (void* const TM_buff)
 };
 
 # define TM_BEGIN_EXT(b,ro) {  \
+        num_threads = global_numThread; \
 	local_exec_mode = 0; \
         b_type = b; \
-	local_thread_id = SPECIAL_THREAD_ID();\
+	local_thread_id = SPECIAL_THREAD_ID(); \
 	ACQUIRE_WRITE_LOCK(); \
 }
 

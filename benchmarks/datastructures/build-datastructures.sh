@@ -24,7 +24,7 @@ rm lib/*.o || true
 
 rm Defines.common.mk
 rm Makefile
-rm Makefile.flags
+#rm Makefile.flags
 rm lib/thread.h
 rm lib/thread.c
 rm lib/tm.h
@@ -32,7 +32,7 @@ rm lib/tm.h
 
 cp ../../backends/$backend/Defines.common.mk .
 cp ../../backends/$backend/Makefile .
-cp ../../backends/$backend/Makefile.flags .
+#cp ../../backends/$backend/Makefile.flags .
 cp ../../backends/$backend/thread.h lib/
 cp ../../backends/$backend/thread.c lib/
 cp ../../backends/$backend/tm.h lib/

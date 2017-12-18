@@ -98,7 +98,7 @@ typedef struct padded_statistics {
     unsigned long read_commits;
     unsigned long htm_commits;
     unsigned long htm_conflict_aborts;
-    unsigned long htm_self_conflicts; 
+    unsigned long htm_self_conflicts;
     unsigned long htm_trans_conflicts;
     unsigned long htm_nontrans_conflicts;
     unsigned long htm_user_aborts;
@@ -164,7 +164,16 @@ extern long alpha;
 extern int running;
 extern __thread unsigned int local_thread_id;
 extern __thread unsigned int local_exec_mode;
-extern __thread unsigned int b_type;
+extern __thread long b_type;
+extern __thread long num_threads;
+extern __thread long counters_snapshot[80];
+extern __thread long actions[81][81];
+extern __thread long to_save[81];
+extern __thread long kill_ignored;
+extern __thread long kill_index;
+extern __thread long kill_cansave;
+extern __thread long kill_acc;
+extern __thread long kill_index2;
 
 #ifndef REDUCED_TM_API
 

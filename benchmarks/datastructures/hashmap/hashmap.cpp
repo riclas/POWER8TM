@@ -45,6 +45,8 @@ __attribute__((aligned(CACHE_LINE_SIZE))) pthread_spinlock_t single_global_lock 
 
 __attribute__((aligned(CACHE_LINE_SIZE))) padded_scalar_t counters[80];
 
+__attribute__((aligned(CACHE_LINE_SIZE))) padded_scalar_t tx_length[10];
+
 __attribute__((aligned(CACHE_LINE_SIZE))) padded_scalar_t triggers[80];
 
 __thread unsigned int local_exec_mode = 0;
@@ -53,12 +55,26 @@ __thread unsigned int local_thread_id;
 
 __thread TIMER_T start_time;
 
+long global_numThread;
+long alpha;
+int running;
+__thread long b_type;
+ __thread long num_threads;
+__thread long counters_snapshot[80];
+__thread long actions[81][81];
+__thread long to_save[81];
+__thread long kill_ignored;
+__thread long kill_index;
+__thread long kill_cansave;
+__thread long kill_acc;
+__thread long kill_index2;
+
 __thread long rs_mask_2 = 0xffffffffffff0000;
 __thread long rs_mask_4 = 0xffffffff00000000;
 __thread long offset = 0;
 __thread char* p;
 __thread int* ip;
-__thread int16_t* i2p; 
+__thread int16_t* i2p;
 __thread long moffset = 0;
 __thread long moffset_2 = 0;
 __thread long moffset_6 = 0;
@@ -154,7 +170,7 @@ long hm_lookup_htm(TM_ARGDECL List* set, long val)
 	int found = 0;
 	const Node_HM* curr = set->sentinel;
 	curr = FAST_PATH_SHARED_READ_P(curr->m_next);
-	long temp; 
+	long temp;
 	while (curr != NULL) {
 		temp = FAST_PATH_SHARED_READ(curr->m_val);
 		if (temp >= val)
@@ -331,7 +347,7 @@ long set_add(TM_ARGDECL long val)
     	res = (local_exec_mode == 3 || local_exec_mode == 1 || local_exec_mode == 4) ? priv_insert_stm(TM_ARG bucket, val) : priv_insert_htm(TM_ARG bucket, val);
     	TM_END();
     } else {
-	TM_BEGIN_EXT(0,ro); //triggers[local_thread_id].value = 1;
+	TM_BEGIN_EXT(3,ro); //triggers[local_thread_id].value = 1;
         res = (local_exec_mode == 3 || local_exec_mode == 1 || local_exec_mode == 4) ? priv_insert_stm(TM_ARG big_bucket, val) : priv_insert_htm(TM_ARG big_bucket, val);
         TM_END();
     }
@@ -347,7 +363,7 @@ int set_remove(TM_ARGDECL long val)
         res = (local_exec_mode == 3 || local_exec_mode == 1 || local_exec_mode == 4) ? priv_remove_item_stm(TM_ARG bucket, val) : priv_remove_item_htm(TM_ARG bucket, val);
         TM_END();
     } else {
-        TM_BEGIN_EXT(1,ro); //triggers[local_thread_id].value = 1;
+        TM_BEGIN_EXT(4,ro); //triggers[local_thread_id].value = 1;
         res = (local_exec_mode == 3 || local_exec_mode == 1 || local_exec_mode == 4) ? priv_remove_item_stm(TM_ARG big_bucket, val) : priv_remove_item_htm(TM_ARG big_bucket, val);
         TM_END();
     }
