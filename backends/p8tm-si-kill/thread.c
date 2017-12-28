@@ -114,7 +114,6 @@ static void*             global_argPtr          = NULL;
 static volatile bool_t   global_doShutdown      = FALSE;
 
 long              global_numThread;
-long alpha;
 
 static void
 threadWait (void* argPtr)
@@ -285,9 +284,9 @@ void tune_alpha(void* x)
 {
  int jump = -1;
  int alpha_prev;
- int max_alpha = 50000;
+ int max_alpha = 1000;
  int can_switch = 1;
- int dir = -1;
+ int dir = -5;
  int skip = 0;
  int oscillating = 0;
  int confidence = 0;
@@ -298,7 +297,7 @@ void tune_alpha(void* x)
  unsigned long tcommits_pre=0;
  unsigned long tcommits_post=0;
  int tcommits=0;
- unsigned long sampling_period=100000;
+ unsigned long sampling_period=10000;
 
  struct timespec tim, tim2;
  tim.tv_sec = 0;
@@ -308,7 +307,7 @@ void tune_alpha(void* x)
  unsigned long iterations=0;
  unsigned long prev_iterations=-1;
 
- alpha = max_alpha;
+ alpha = 100;
 
  while(running){
     if(can_switch){
@@ -358,7 +357,7 @@ void tune_alpha(void* x)
 
         if (iterations> prev_iterations+21){
                 jump = -1;
-                if(alpha<alpha_prev){
+                if(alpha < alpha_prev){
                         can_switch = 0;
                         alpha = alpha_prev;
                         prev_iterations = iterations;
@@ -369,6 +368,8 @@ void tune_alpha(void* x)
 
     }
  }
+
+ printf("finished\n");
 }
 
 void hc_start(){

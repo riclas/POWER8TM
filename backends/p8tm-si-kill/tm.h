@@ -220,9 +220,9 @@ __TM_begin_rot (void* const TM_buff)
 #  define TM_THREAD_ENTER()
 #  define TM_THREAD_EXIT()
 
-# define IS_LOCKED(lock)        *((volatile int*)(&lock)) != 0
+# define IS_LOCKED(lock)        *((volatile long*)(&lock)) != 0
 
-# define IS_GLOBAL_LOCKED(lock)        *((volatile int*)(&lock)) == 2
+# define IS_GLOBAL_LOCKED(lock)        *((volatile long*)(&lock)) == 2
 
 # define TM_BEGIN(ro) TM_BEGIN_EXT(0,ro)
 
@@ -238,12 +238,16 @@ __TM_begin_rot (void* const TM_buff)
 	while(rot_budget > 0){ \
 		rot_status = 1; \
 		TM_buff_type TM_buff; \
-                long start_time; \
-		READ_TIMESTAMP(start_time); \
-		memset(counters_snapshot, 0, sizeof(counters_snapshot)); \
+/*		memset(counters_snapshot, 0, sizeof(counters_snapshot)); \
+                memset(actions, 0, sizeof(actions)); \
+                memset(to_save, 0, sizeof(to_save)); */\
+                padded_scalar start_time; \
+                READ_TIMESTAMP(start_time.value); \
+                counters[local_thread_id].value = start_time.value + tx_length[b_type].value; \
+                memset(counters_snapshot, 0, sizeof(counters_snapshot)); \
                 memset(actions, 0, sizeof(actions)); \
                 memset(to_save, 0, sizeof(to_save)); \
-                counters[local_thread_id].value = start_time + tx_length[b_type].value; \
+/*printf("tid %d b_type %d length %d\n",local_thread_id, b_type, tx_length[b_type].value);*/ \
 		rmb(); \
 		if(IS_LOCKED(single_global_lock)){ \
 			counters[local_thread_id].value = INACTIVE; \
@@ -323,10 +327,13 @@ __TM_begin_rot (void* const TM_buff)
             if(temp.value != INACTIVE) { \
                 padded_scalar wait_needed; \
 		wait_needed.value = temp.value - end_time.value; \
+                /*printf("needed %d\n",wait_needed.value);*/ \
                 if(wait_needed.value > 0) { \
-                    kill_index2 = wait_needed.value/1; \
+                    kill_index2 = wait_needed.value/alpha; \
+/*printf("index2 %d\n",kill_index2);*/\
                     if(kill_index2 > num_threads - 1){ \
                         actions[num_threads][to_save[num_threads]++] = kill_index; \
+/*printf("kill\n");*/\
                     } else { \
                         actions[kill_index2][to_save[kill_index2]++] = kill_index; \
                         counters_snapshot[kill_index] = temp.value; \
@@ -348,16 +355,18 @@ __TM_begin_rot (void* const TM_buff)
                 break; \
             } \
         } \
-	for(kill_index=num_threads-1; kill_index >= 0; kill_index--){ \
+	for(kill_index=num_threads; kill_index >= 0; kill_index--){ \
             if(kill_index > kill_cansave){ \
                 for(kill_index2=0; kill_index2 < to_save[kill_index]; kill_index2++){ \
-                    void* temp = triggers[actions[kill_index][kill_index2]].value; /*kill the transaction*/ \
+/*printf("killing\n");*/\
+                    padded_scalar temp; \
+		    temp.value = triggers[actions[kill_index][kill_index2]].value; /*kill the transaction*/ \
                 } \
             } else { \
                 for(kill_index2=0; kill_index2 < to_save[kill_index]; kill_index2++){ \
 			/*printf("%d %d \n",counters_snapshot[actions[kill_index][kill_index2]], counters[actions[kill_index][kill_index2]].value); \
                     /*printf("commits %d kill_index %d x %d to_save %d aa %d\n",stats_array[local_thread_id].rot_commits,kill_index, kill_index2, to_save[kill_index], actions[kill_index][kill_index2]);*/ \
-                    while(counters_snapshot[actions[kill_index][kill_index2]] == counters[actions[kill_index][kill_index2]].value){ \
+                    while(counters_snapshot[actions[kill_index][kill_index2]] != INACTIVE && counters_snapshot[actions[kill_index][kill_index2]] == counters[actions[kill_index][kill_index2]].value){ \
                         cpu_relax(); \
                     } \
                 } \
@@ -366,6 +375,7 @@ __TM_begin_rot (void* const TM_buff)
         padded_scalar end_wait_time; \
        	READ_TIMESTAMP(end_wait_time.value); \
        	stats_array[local_thread_id].wait_time += end_wait_time.value - start_wait_time.value; \
+/*int i=0; while(i++ < 100000000);*/ \
 };
 
 # define QUIESCENCE_CALL_GL(){ \
@@ -379,12 +389,14 @@ __TM_begin_rot (void* const TM_buff)
 # define RELEASE_WRITE_LOCK(){ \
 	if(local_exec_mode == 1){ \
 	        __TM_suspend(); \
-                counters[local_thread_id].value = INACTIVE; \
-		padded_scalar end_time; \
+                padded_scalar end_time; \
                 READ_TIMESTAMP(end_time.value); \
-                if(local_thread_id == 0){ \
-                    tx_length[b_type].value = tx_length[b_type].value*0.8 + (counters[local_thread_id].value - tx_length[b_type].value - end_time.value)*0.2; \
+		if(local_thread_id == 0){ \
+/*                        printf("%llu %llu\n", end_time.value, counters[local_thread_id].value);*/ \
+                    tx_length[b_type].value = tx_length[b_type].value*0.5 + (end_time.value - counters[local_thread_id].value + tx_length[b_type].value)*0.5; \
+/*printf("after tid %d b_type %d length %d\n",local_thread_id, b_type, tx_length[b_type].value);*/ \
                 } \
+                counters[local_thread_id].value = INACTIVE; \
                 QUIESCENCE_CALL_ROT(); \
 	        __TM_resume(); \
 		__TM_end(); \
