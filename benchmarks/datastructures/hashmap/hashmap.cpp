@@ -41,7 +41,7 @@ __thread unsigned long cm_seed = 123456789UL;
 
 __attribute__((aligned(CACHE_LINE_SIZE))) padded_statistics_t stats_array[80];
 
-__attribute__((aligned(CACHE_LINE_SIZE))) pthread_spinlock_t single_global_lock = 0;
+__attribute__((aligned(CACHE_LINE_SIZE))) spinlock_t single_global_lock;
 
 __attribute__((aligned(CACHE_LINE_SIZE))) padded_scalar_t counters[80];
 
@@ -58,6 +58,7 @@ __thread TIMER_T start_time;
 long global_numThread;
 long alpha;
 int running;
+long INACTIVE = 0;
 __thread long b_type;
  __thread long num_threads;
 __thread long counters_snapshot[80];
