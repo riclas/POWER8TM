@@ -75,7 +75,6 @@
 # define CACHE_LINE_SIZE 128
 
 #include <pthread.h>
-//#include "timer.h"
 
 typedef struct spinlock {
     pthread_spinlock_t lock;
@@ -155,14 +154,13 @@ extern __thread unsigned long cm_seed;
 #  define MAX_BACKOFF                   (1UL << 31)
 # endif /* MAX_BACKOFF */
 
-extern __attribute__((aligned(CACHE_LINE_SIZE))) spinlock_t single_global_lock;
+extern __attribute__((aligned(CACHE_LINE_SIZE))) padded_scalar_t single_global_lock;
 
 extern __attribute__((aligned(CACHE_LINE_SIZE))) padded_statistics_t stats_array[];
 
 extern long global_numThread;
 extern long alpha;
 extern int running;
-extern long INACTIVE;
 extern __thread unsigned int local_thread_id;
 extern __thread unsigned int local_exec_mode;
 extern __thread long b_type;
