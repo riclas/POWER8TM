@@ -356,6 +356,7 @@ __TM_begin_rot (void* const TM_buff)
 	/*long waited_threads = 0, waited = 0; */\
 	for(index=0; index < num_threads; index++){ \
 		if(counters_snapshot[index] != 0){ \
+			/*void* temp = triggers[index].value;*/ \
 			while(counters[index].value == counters_snapshot[index]){ \
 				cpu_relax(); \
 			} \

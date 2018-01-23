@@ -154,7 +154,7 @@ extern __thread unsigned long cm_seed;
 #  define MAX_BACKOFF                   (1UL << 31)
 # endif /* MAX_BACKOFF */
 
-extern __attribute__((aligned(CACHE_LINE_SIZE))) padded_scalar_t single_global_lock;
+extern __attribute__((aligned(CACHE_LINE_SIZE))) pthread_spinlock_t single_global_lock;
 
 extern __attribute__((aligned(CACHE_LINE_SIZE))) padded_statistics_t stats_array[];
 

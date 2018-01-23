@@ -41,7 +41,7 @@ __thread unsigned long cm_seed = 123456789UL;
 
 __attribute__((aligned(CACHE_LINE_SIZE))) padded_statistics_t stats_array[80];
 
-__attribute__((aligned(CACHE_LINE_SIZE))) padded_scalar_t single_global_lock;
+__attribute__((aligned(CACHE_LINE_SIZE))) pthread_spinlock_t single_global_lock;
 
 __attribute__((aligned(CACHE_LINE_SIZE))) padded_scalar_t counters[80];
 
@@ -112,15 +112,15 @@ long hm_insert_htm(TM_ARGDECL List* set, long val)
         // traverse the list to find the insertion point
         Node_HM* prev = set->sentinel;
         Node_HM* curr = FAST_PATH_SHARED_READ_P(prev->m_next);
-	long temp;
+
         while (curr != NULL) {
-		temp = FAST_PATH_SHARED_READ(curr->m_val);
-                if (temp >= val)
+		//temp = FAST_PATH_SHARED_READ(curr->m_val);
+                if (FAST_PATH_SHARED_READ(curr->m_val) >= val)
                         break;
                 prev = curr;
                 curr = FAST_PATH_SHARED_READ_P(prev->m_next);
         }
-	if(curr){
+	/*if(curr){
 		temp = FAST_PATH_SHARED_READ(curr->m_val);
 	}
         if (!curr || (temp > val)) {
@@ -134,10 +134,19 @@ long hm_insert_htm(TM_ARGDECL List* set, long val)
 		//for(x = 0; x < 1000 ; x++)
                 FAST_PATH_SHARED_WRITE_P(insert_point->m_next, i);
 		int x=1;
-                //for(x = 1; x < 1000 ; x++);
-		return x;
+                return x;
+	}
+	return 0;*/
+	if (!curr || (FAST_PATH_SHARED_READ(curr->m_val) > val)) {
+                Node_HM* insert_point = (Node_HM*)(prev);
+
+                // create the new node
+                Node_HM* i = (Node_HM*)TM_MALLOC(sizeof(Node_HM));
+                i->m_val = val;
+                i->m_next = (Node_HM*)(curr);
+                FAST_PATH_SHARED_WRITE_P(insert_point->m_next, i);
+		return 1;
         }
-	return 0;
 }
 
 void hm_insert_seq(List* set, long val)
@@ -185,7 +194,7 @@ long hm_lookup_htm(TM_ARGDECL List* set, long val)
 }
 
 TM_CALLABLE
-int hm_remove_htm(TM_ARGDECL List* set, long val)
+/*int hm_remove_htm(TM_ARGDECL List* set, long val)
 {
 	Node_HM* prev = set->sentinel;
 	Node_HM* curr = FAST_PATH_SHARED_READ_P(prev->m_next);
@@ -203,6 +212,27 @@ int x=1;
 			return x;
 		}
 		else if (temp > val) {
+			return 0;
+		}
+		prev = curr;
+		curr = FAST_PATH_SHARED_READ_P(prev->m_next);
+	}
+	return 0;
+}*/
+int hm_remove_htm(TM_ARGDECL List* set, long val)
+{
+	Node_HM* prev = set->sentinel;
+	Node_HM* curr = FAST_PATH_SHARED_READ_P(prev->m_next);
+	while (curr != NULL) {
+
+		if (FAST_PATH_SHARED_READ(curr->m_val) == val) {
+			Node_HM* mod_point = (Node_HM*)(prev);
+			FAST_PATH_SHARED_WRITE_P(mod_point->m_next, FAST_PATH_SHARED_READ_P(curr->m_next));
+
+//			FAST_PATH_FREE((Node_HM*)(curr));
+			return 1;
+		}
+		else if (FAST_PATH_SHARED_READ(curr->m_val) > val) {
 			return 0;
 		}
 		prev = curr;
@@ -298,8 +328,8 @@ long priv_insert_htm(TM_ARGDECL List** buck, long val)
 void priv_insert_seq(long val)
 {
 	hm_insert_seq( (bucket[val % N_BUCKETS]), val);
-        hm_insert_seq( (big_bucket[val % N_BUCKETS]), val);
-	hm_insert_seq( (big_bucket[(val+1) % N_BUCKETS]), val+1);
+	for(int i=0; i < 10; i++)
+	        hm_insert_seq( (big_bucket[(val+i) % N_BUCKETS]), val+i);
 }
 
 TM_CALLABLE
@@ -316,9 +346,8 @@ int priv_remove_item_htm(TM_ARGDECL List** buck, long val)
 
 TM_CALLABLE
 long priv_insert_stm(TM_ARGDECL List** buck, long val)
-{ //triggers[local_thread_id].value = 1;
-
-        return hm_insert_stm(TM_ARG (buck[val % N_BUCKETS]), val);
+{
+    return hm_insert_stm(TM_ARG (buck[val % N_BUCKETS]), val);
 }
 
 TM_CALLABLE
@@ -329,7 +358,7 @@ long priv_lookup_stm(TM_ARGDECL long val)
 
 TM_CALLABLE
 int priv_remove_item_stm(TM_ARGDECL List** buck, long val)
-{ //triggers[local_thread_id].value = 1;
+{
     return hm_remove_stm(TM_ARG (buck[val % N_BUCKETS]), val);
 }
 
@@ -343,12 +372,15 @@ long set_add(TM_ARGDECL long val)
     int res = 0;
     int ro = 0;
     if(rand() % 100 < 90){
-    	TM_BEGIN_EXT(0,ro);
-    	res = (local_exec_mode == 3 || local_exec_mode == 1 || local_exec_mode == 4) ? priv_insert_stm(TM_ARG bucket, val) : priv_insert_htm(TM_ARG bucket, val);
-    	TM_END();
+        TM_BEGIN_EXT(0,ro);
+        res = (local_exec_mode == 3 || local_exec_mode == 1 || local_exec_mode == 4) ? priv_insert_stm(TM_ARG bucket, val)
+        : priv_insert_htm(TM_ARG bucket, val);
+        TM_END();
     } else {
-	TM_BEGIN_EXT(3,ro); //triggers[local_thread_id].value = 1;
-        res = (local_exec_mode == 3 || local_exec_mode == 1 || local_exec_mode == 4) ? priv_insert_stm(TM_ARG big_bucket, val) : priv_insert_htm(TM_ARG big_bucket, val);
+        TM_BEGIN_EXT(3,ro);
+	triggers[local_thread_id].value=1;
+        res = (local_exec_mode == 3 || local_exec_mode == 1 || local_exec_mode == 4) ? priv_insert_stm(TM_ARG big_bucket, val)
+                : priv_insert_htm(TM_ARG big_bucket, val);
         TM_END();
     }
     return res;
@@ -360,11 +392,14 @@ int set_remove(TM_ARGDECL long val)
     int ro = 0;
     if(rand() % 100 < 90){
         TM_BEGIN_EXT(1,ro);
-        res = (local_exec_mode == 3 || local_exec_mode == 1 || local_exec_mode == 4) ? priv_remove_item_stm(TM_ARG bucket, val) : priv_remove_item_htm(TM_ARG bucket, val);
+        res = (local_exec_mode == 3 || local_exec_mode == 1 || local_exec_mode == 4) ? priv_remove_item_stm(TM_ARG bucket, val)
+        : priv_remove_item_htm(TM_ARG bucket, val);
         TM_END();
     } else {
-        TM_BEGIN_EXT(4,ro); //triggers[local_thread_id].value = 1;
-        res = (local_exec_mode == 3 || local_exec_mode == 1 || local_exec_mode == 4) ? priv_remove_item_stm(TM_ARG big_bucket, val) : priv_remove_item_htm(TM_ARG big_bucket, val);
+        TM_BEGIN_EXT(4,ro);
+	triggers[local_thread_id].value=1;
+        res = (local_exec_mode == 3 || local_exec_mode == 1 || local_exec_mode == 4) ? priv_remove_item_stm(TM_ARG big_bucket, val)
+                : priv_remove_item_htm(TM_ARG big_bucket, val);
         TM_END();
     }
     return res;

@@ -307,7 +307,7 @@ void tune_alpha(void* x)
  unsigned long iterations=0;
  unsigned long prev_iterations=-1;
 
- alpha = 100;
+ alpha = 300;
 
  while(running){
     if(can_switch){
