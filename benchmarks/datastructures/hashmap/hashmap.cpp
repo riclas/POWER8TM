@@ -68,6 +68,7 @@ __thread long kill_index;
 __thread long kill_cansave;
 __thread long kill_acc;
 __thread long kill_index2;
+__thread long batching=0;
 
 __thread long rs_mask_2 = 0xffffffffffff0000;
 __thread long rs_mask_4 = 0xffffffff00000000;
@@ -105,6 +106,9 @@ static int N_BUCKETS = 512;
 
 List** bucket;
 List** big_bucket;
+long range;
+__thread long myOps;
+__thread long longOps=0;
 
 TM_CALLABLE
 long hm_insert_htm(TM_ARGDECL List* set, long val)
@@ -325,11 +329,9 @@ long priv_insert_htm(TM_ARGDECL List** buck, long val)
     return hm_insert_htm(TM_ARG (buck[val % N_BUCKETS]), val);
 }
 
-void priv_insert_seq(long val)
+void priv_insert_seq(TM_ARGDECL List** buck, long val)
 {
-	hm_insert_seq( (bucket[val % N_BUCKETS]), val);
-	for(int i=0; i < 10; i++)
-	        hm_insert_seq( (big_bucket[(val+i) % N_BUCKETS]), val+i);
+	hm_insert_seq( (buck[val % N_BUCKETS]), val);
 }
 
 TM_CALLABLE
@@ -362,8 +364,8 @@ int priv_remove_item_stm(TM_ARGDECL List** buck, long val)
     return hm_remove_stm(TM_ARG (buck[val % N_BUCKETS]), val);
 }
 
-long set_add_seq(long val) {
-	priv_insert_seq(val);
+long set_add_seq(List** buck, long val) {
+	priv_insert_seq(buck, val);
  return 1;
 }
 
@@ -371,17 +373,21 @@ long set_add(TM_ARGDECL long val)
 {
     int res = 0;
     int ro = 0;
-    if(rand() % 100 < 90){
+    if(rand() % 100 < (100-5*BATCH_RATIO)){
         TM_BEGIN_EXT(0,ro);
-        res = (local_exec_mode == 3 || local_exec_mode == 1 || local_exec_mode == 4) ? priv_insert_stm(TM_ARG bucket, val)
-        : priv_insert_htm(TM_ARG bucket, val);
+	for(int i = 0; i < BATCH_RATIO; i++)
+        	//res = (local_exec_mode == 3 || local_exec_mode == 1 || local_exec_mode == 4) ? priv_insert_stm(TM_ARG bucket, val+i)
+		res = priv_insert_htm(TM_ARG bucket, val+i);
         TM_END();
+	myOps-=BATCH_RATIO;
     } else {
         TM_BEGIN_EXT(3,ro);
-	triggers[local_thread_id].value=1;
-        res = (local_exec_mode == 3 || local_exec_mode == 1 || local_exec_mode == 4) ? priv_insert_stm(TM_ARG big_bucket, val)
-                : priv_insert_htm(TM_ARG big_bucket, val);
+        for(int i = 0; i < 10; i++)
+               	//res = (local_exec_mode == 3 || local_exec_mode == 1 || local_exec_mode == 4) ? priv_insert_stm(TM_ARG bucket, val+i)
+                res = priv_insert_htm(TM_ARG bucket, val+i);
         TM_END();
+	myOps--;
+	longOps++;
     }
     return res;
 }
@@ -390,17 +396,21 @@ int set_remove(TM_ARGDECL long val)
 {
     int res = 0;
     int ro = 0;
-    if(rand() % 100 < 90){
+    if(rand() % 100 < (100-5*BATCH_RATIO)){
         TM_BEGIN_EXT(1,ro);
-        res = (local_exec_mode == 3 || local_exec_mode == 1 || local_exec_mode == 4) ? priv_remove_item_stm(TM_ARG bucket, val)
-        : priv_remove_item_htm(TM_ARG bucket, val);
+        for(int i = 0; i < BATCH_RATIO; i++)
+	        //res = (local_exec_mode == 2 || local_exec_mode == 1 || local_exec_mode == 4) ? priv_remove_item_stm(TM_ARG bucket, val+i)
+	        res = priv_remove_item_htm(TM_ARG bucket, val+i);
         TM_END();
+	myOps-=BATCH_RATIO;
     } else {
-        TM_BEGIN_EXT(4,ro);
-	triggers[local_thread_id].value=1;
-        res = (local_exec_mode == 3 || local_exec_mode == 1 || local_exec_mode == 4) ? priv_remove_item_stm(TM_ARG big_bucket, val)
-                : priv_remove_item_htm(TM_ARG big_bucket, val);
+	TM_BEGIN_EXT(4,ro);
+        for(int i = 0; i < 10; i++)
+        //res = (local_exec_mode == 3 || local_exec_mode == 1 || local_exec_mode == 4) ? priv_remove_item_stm(TM_ARG bucket, val+i)
+                res = priv_remove_item_htm(TM_ARG bucket, val+i);
         TM_END();
+	myOps--;
+	longOps++;
     }
     return res;
 }
@@ -411,14 +421,16 @@ long set_contains(TM_ARGDECL long  val)
 
     int ro = 1;
     TM_BEGIN_EXT(2, ro);
-    res = (local_exec_mode == 3 || local_exec_mode == 1 || local_exec_mode == 4) ? priv_lookup_stm(TM_ARG val) : priv_lookup_htm(TM_ARG val);
+    //res = (local_exec_mode == 3 || local_exec_mode == 1 || local_exec_mode == 4) ? priv_lookup_stm(TM_ARG val) : 
+    priv_lookup_htm(TM_ARG val);
     TM_END();
+    myOps--;
 
     return res;
 }
 
 #include <sched.h>
-  long range;
+
   int update;
   unsigned long nb_add;
   unsigned long nb_remove;
@@ -436,7 +448,7 @@ void *test(void *data)
 
   unsigned int mySeed = seed + sched_getcpu();
 
-  long myOps = operations / nb_threads;
+  myOps = operations / nb_threads * (1-0.1*(BATCH_RATIO-1));
   long val = -1;
   int op;
 
@@ -456,11 +468,10 @@ void *test(void *data)
       long tmp = (rand_r(&mySeed) % range) + 1;
       set_contains(TM_ARG tmp);
     }
-
-    myOps--;
   }
 
   TM_THREAD_EXIT();
+printf("long ops: %d\n",longOps);
   return NULL;
 }
 
@@ -594,8 +605,14 @@ MAIN(argc, argv) {
   printf("Adding %d entries to set\n", initial);
   for (i = 0; i < initial; i++) {
     val = (rand() % range) + 1;
-    set_add_seq(val);
+    set_add_seq(bucket, val);
   }
+
+/*  for (long x = 0; x < initial*2; x++) {
+    val = (rand() % (range*2)) + 1;
+    set_add_seq(big_bucket, val);
+  }
+*/
   puts("Added\n");
   seed = rand();
   TIMER_READ(start);

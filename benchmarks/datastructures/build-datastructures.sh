@@ -17,14 +17,14 @@ wait_ratio=1
 if [ $# -eq 4 ] ; then
     htm_retries=$2 # e.g.: 5
     rot_retries=$3 # e.g.: 2, this can also be retry policy for tle
-    wait_ratio=$4  # between 0 and 1
+    batch_ratio=$4  # between 1 and 10
 fi
 
 rm lib/*.o || true
 
 rm Defines.common.mk
 rm Makefile
-#rm Makefile.flags
+rm Makefile.flags
 rm lib/thread.h
 rm lib/thread.c
 rm lib/tm.h
@@ -32,7 +32,7 @@ rm lib/tm.h
 
 cp ../../backends/$backend/Defines.common.mk .
 cp ../../backends/$backend/Makefile .
-#cp ../../backends/$backend/Makefile.flags .
+cp ../../backends/$backend/Makefile.flags .
 cp ../../backends/$backend/thread.h lib/
 cp ../../backends/$backend/thread.c lib/
 cp ../../backends/$backend/tm.h lib/
@@ -46,7 +46,7 @@ do
 	if [[ $backend == htm-sgl || $backend == hybrid-norec ]] ; then
 		make_command="make -f Makefile HTM_RETRIES=-DHTM_RETRIES=$htm_retries RETRY_POLICY=-DRETRY_POLICY=$rot_retries"
 	else
-        	make_command="make -f Makefile HTM_RETRIES=-DHTM_RETRIES=$htm_retries ROT_RETRIES=-DROT_RETRIES=$rot_retries WAIT_RATIO=-DWAIT_RATIO=$wait_ratio"
+        	make_command="make -f Makefile HTM_RETRIES=-DHTM_RETRIES=$htm_retries ROT_RETRIES=-DROT_RETRIES=$rot_retries BATCH_RATIO=-DBATCH_RATIO=$wait_ratio"
 	fi
         $make_command
     rc=$?

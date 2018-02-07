@@ -179,7 +179,8 @@ void bindThread(long threadId) {
     cpu_set_t my_set;
     CPU_ZERO(&my_set);
     int offset = threadId / 10;
-    CPU_SET((threadId % 10)*8+offset, &my_set);
+//    CPU_SET((threadId % 10)*8+offset, &my_set);
+    CPU_SET((threadId%5)*8+(threadId/5)%2*120+offset, &my_set);
     sched_setaffinity(0, sizeof(cpu_set_t), &my_set);
 }
 #endif
