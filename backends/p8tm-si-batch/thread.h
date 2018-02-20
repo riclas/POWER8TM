@@ -92,6 +92,8 @@ typedef struct padded_pointer {
 } __attribute__((aligned(CACHE_LINE_SIZE))) padded_pointer_t;
 
 typedef struct padded_statistics {
+    unsigned long begins;
+    unsigned long ends;
     unsigned long total_time;
     unsigned long wait_time;
     unsigned long read_commits;

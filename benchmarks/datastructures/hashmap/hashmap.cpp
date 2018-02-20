@@ -41,6 +41,9 @@ __thread unsigned long cm_seed = 123456789UL;
 
 __attribute__((aligned(CACHE_LINE_SIZE))) padded_statistics_t stats_array[80];
 
+long total_first_time;
+long total_second_time;
+
 __attribute__((aligned(CACHE_LINE_SIZE))) pthread_spinlock_t single_global_lock;
 
 __attribute__((aligned(CACHE_LINE_SIZE))) padded_scalar_t counters[80];
@@ -373,7 +376,8 @@ long set_add(TM_ARGDECL long val)
 {
     int res = 0;
     int ro = 0;
-    if(rand() % 100 < (100-5*BATCH_RATIO)){
+
+    if(rand() % 100 < (100-10*BATCH_RATIO)){
         TM_BEGIN_EXT(0,ro);
 	for(int i = 0; i < BATCH_RATIO; i++)
         	//res = (local_exec_mode == 3 || local_exec_mode == 1 || local_exec_mode == 4) ? priv_insert_stm(TM_ARG bucket, val+i)
@@ -396,7 +400,7 @@ int set_remove(TM_ARGDECL long val)
 {
     int res = 0;
     int ro = 0;
-    if(rand() % 100 < (100-5*BATCH_RATIO)){
+    if(rand() % 100 < (100-10*BATCH_RATIO)){
         TM_BEGIN_EXT(1,ro);
         for(int i = 0; i < BATCH_RATIO; i++)
 	        //res = (local_exec_mode == 2 || local_exec_mode == 1 || local_exec_mode == 4) ? priv_remove_item_stm(TM_ARG bucket, val+i)

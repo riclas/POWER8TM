@@ -260,7 +260,7 @@ __TM_begin_rot (void* const TM_buff)
 		} \
 		unsigned char tx_status = __TM_begin_rot(&TM_buff); \
 		if (tx_status == _HTM_TBEGIN_STARTED) { \
-                        if(b_type > 2 && rot_budget > 1) triggers[local_thread_id].value = 1; \
+                        if(b_type > 2 && rot_budget > 2) triggers[local_thread_id].value = 1; \
                         break; \
                 } \
 		else if(__TM_conflict(&TM_buff)){ \

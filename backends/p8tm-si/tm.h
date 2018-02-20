@@ -214,6 +214,7 @@ __TM_begin_rot (void* const TM_buff)
        \tROT capacity aborts:  %lu\n \
           \t\tROT persistent aborts:  %lu\n \
        \tROT other aborts:  %lu\n", total_time, wait_time, read_commits+htm_commits+rot_commits+gl_commits, read_commits, htm_commits, rot_commits, gl_commits,htm_conflict_aborts+htm_user_aborts+htm_capacity_aborts+htm_other_aborts+rot_conflict_aborts+rot_user_aborts+rot_capacity_aborts+rot_other_aborts,htm_conflict_aborts,htm_self_conflicts,htm_trans_conflicts,htm_nontrans_conflicts,htm_user_aborts,htm_capacity_aborts,htm_persistent_aborts,htm_other_aborts,rot_conflict_aborts,rot_self_conflicts,rot_trans_conflicts,rot_nontrans_conflicts,rot_user_aborts,rot_capacity_aborts,rot_persistent_aborts,rot_other_aborts); \
+/*printf("first time: %d, second time: %d\n",total_first_time,total_second_time);*/ \
 } \
 
 #  define TM_THREAD_ENTER()
@@ -250,6 +251,7 @@ __TM_begin_rot (void* const TM_buff)
 	while(IS_LOCKED(single_global_lock)){ \
         	cpu_relax(); \
         } \
+	long start_time; \
 	while(rot_budget > 0){ \
 		rot_status = 1; \
 		TM_buff_type TM_buff; \
@@ -267,6 +269,13 @@ __TM_begin_rot (void* const TM_buff)
 			while(IS_LOCKED(single_global_lock)) cpu_relax(); \
 			continue; \
 		} \
+		/*if(rot_budget == 1){ \
+			long first_time; \
+			first_time = start_time; \
+	        	READ_TIMESTAMP(start_time); \
+			total_first_time += start_time-first_time; \
+		} else \
+			READ_TIMESTAMP(start_time);*/ \
 		unsigned char tx_status = __TM_begin_rot(&TM_buff); \
 		if (tx_status == _HTM_TBEGIN_STARTED) { \
                         break; \
@@ -302,6 +311,11 @@ __TM_begin_rot (void* const TM_buff)
 			stats_array[local_thread_id].rot_other_aborts ++; \
 		} \
 	} \
+	/*if(rot_budget == 0){ \
+       	        long second_time; \
+                READ_TIMESTAMP(second_time); \
+                total_second_time += second_time-start_time; \
+        } */\
 };
 
 # define ACQUIRE_GLOBAL_LOCK(){ \
@@ -409,6 +423,7 @@ __TM_begin_rot (void* const TM_buff)
         	rmb(); \
 	         __TM_resume(); \
 		QUIESCENCE_CALL_ROT(); \
+		/*__TM_abort();*/ \
 		__TM_end(); \
 		counters[local_thread_id].value+=1; /*=8 inactive rot*/ \
 		/*printf("thread %d committed in ROT with counters %lu and rot_counters %d\n",local_thread_id,counters[local_thread_id].value,rot_counters[local_thread_id].value); */\

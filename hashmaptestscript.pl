@@ -23,7 +23,7 @@ use Cwd;
 #"hashmap -i1000 -b1 -r1000 -d1000000 -u100","hashmap -i1000 -b10 -r1000 -d1000000 -u100","hashmap -i1000 -b100 -r1000 -d1000000 -u100",
 #"hashmap -i10000 -b10 -r10000 -d1000000 -u100", "hashmap -i10000 -b100 -r10000 -d1000000 -u100", "hashmap -i10000 -b1000 -r10000 -d1000000 -u100",
 #"hashmap -i100000 -b100 -r100000 -d1000000 -u100", "hashmap -i100000 -b1000 -r100000 -d1000000 -u100", "hashmap -i100000 -b10000 -r100000 -d1000000 -u100",
-"hashmap -i500000 -b1000 -r500000 -d1000000 -u100"
+"hashmap -i500000 -b1000 -r500000 -d100000 -u100"
 #"hashmap -i100000 -b100 -r100000 -d1000000 -u100"
     #,"yada",
     #"genome","intruder","labyrinth","ssca2"
@@ -33,7 +33,7 @@ use Cwd;
 # Names of the STM algorithms that we want to test.  Note that you must
 # consider semantics yourself... our policies don't add that support after
 # the fact.  So in this case, we're using 'no semantics'
-@Algs = ("p8tm-si-kill 0 20","p8tm-si 0 2"#,"htm-sgl"
+@Algs = ("p8tm-si-fullkill 0 20","p8tm-si 0 20"#,"htm-sgl"
         #,"NOrecHTBOT SPEC_TXS=2"#("NOrec", "NOrecno", "NOrecHTBOT SPEC_TXS=1", "NOrecHTBOT SPEC_TXS=2", "NOrecHTBOT SPEC_TXS=4" #("LLT", "Swiss", "NOrec");#, "NOrecHT SPEC_TXS=1", "NOrecHT SPEC_TXS=2", "NOrecHT SPEC_TXS=4", "NOrecHTBOT SPEC_TXS=1", "NOrecHTBOT SPEC_TXS=2", "NOrecHTBOT SPEC_TXS=4", NOrecHTO);
         #,"NOrecHTBOT SPEC_TXS=1 WPH=2", "NOrecHTBOT SPEC_TXS=2 WPH=2", "NOrecHTBOT SPEC_TXS=4 WPH=2"
         #,"NOrecHTBOT SPEC_TXS=1 WPH=3", "NOrecHTBOT SPEC_TXS=2 WPH=3", "NOrecHTBOT SPEC_TXS=4 WPH=3"

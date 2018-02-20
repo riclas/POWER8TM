@@ -143,6 +143,8 @@ __TM_begin_rot (void* const TM_buff)
 #  define TM_STARTUP(numThread, bId) /*running = 1; hc_start();*/
 #  define TM_SHUTDOWN(){ \
     running = 0; \
+    unsigned long begins = 0; \
+    unsigned long ends = 0; \
     unsigned long wait_time = 0; \
     unsigned long total_time = 0; \
     unsigned long read_commits = 0; \
@@ -167,6 +169,8 @@ __TM_begin_rot (void* const TM_buff)
     unsigned long gl_commits = 0; \
     int i = 0; \
     for (; i < 80; i++) { \
+       begins += stats_array[i].begins; \
+       ends += stats_array[i].ends; \
        wait_time += stats_array[i].wait_time; \
        total_time += stats_array[i].total_time; \
        read_commits += stats_array[i].read_commits; \
@@ -216,6 +220,7 @@ __TM_begin_rot (void* const TM_buff)
        \tROT other aborts:  %lu\n", total_time, wait_time, read_commits+htm_commits+rot_commits+gl_commits, read_commits, htm_commits, rot_commits, gl_commits,htm_conflict_aborts+htm_user_aborts+htm_capacity_aborts+htm_other_aborts+rot_conflict_aborts+rot_user_aborts+rot_capacity_aborts+rot_other_aborts,htm_conflict_aborts,htm_self_conflicts,htm_trans_conflicts,htm_nontrans_conflicts,htm_user_aborts,htm_capacity_aborts,htm_persistent_aborts,htm_other_aborts,rot_conflict_aborts,rot_self_conflicts,rot_trans_conflicts,rot_nontrans_conflicts,rot_user_aborts,rot_capacity_aborts,rot_persistent_aborts,rot_other_aborts); \
 	for(int i=0; i < 6; i++) \
 		printf("type %d length %d\n",i,tx_length[i]); \
+	printf("begins: %lu ends: %lu\n", begins, ends); \
 } \
 
 #  define TM_THREAD_ENTER()
@@ -258,6 +263,7 @@ __TM_begin_rot (void* const TM_buff)
 			while(IS_LOCKED(single_global_lock)) cpu_relax(); \
 			continue; \
 		} \
+/*		stats_array[local_thread_id].begins++;*/ \
 		unsigned char tx_status = __TM_begin_rot(&TM_buff); \
 		if (tx_status == _HTM_TBEGIN_STARTED) { \
                         /*triggers[local_thread_id].value = 1;*/ \
@@ -317,6 +323,7 @@ __TM_begin_rot (void* const TM_buff)
 	if(!rot_status){ \
 		local_exec_mode = 2; \
 		ACQUIRE_GLOBAL_LOCK(); \
+		batching = 0;\
 	} \
 };\
 
@@ -329,8 +336,8 @@ __TM_begin_rot (void* const TM_buff)
         long to_save[81]={0};*/ \
         /*long state = 0; \
         long x = 0; \
-        padded_scalar kill_ignored;*/ \
-	kill_ignored=0; \
+        padded_scalar kill_ignored; \
+	kill_ignored=0;*/ \
         padded_scalar start_wait_time; \
         READ_TIMESTAMP(start_wait_time.value); \
 	for(kill_index=0; kill_index < num_threads; kill_index++){ \
@@ -423,9 +430,12 @@ __TM_begin_rot (void* const TM_buff)
                 } \
 		batching = 0; \
 		for(kill_index=0; kill_index < num_threads; kill_index++){ \
-			if(counters[kill_index].value > end_time.value + tx_length[b_type].value){ \
-				batching = end_time.value + tx_length[b_type].value; \
-                               	break; \
+			if(kill_index != local_thread_id){ \
+				if(counters[kill_index].value > end_time.value + tx_length[b_type].value*1.5){ \
+					batching = end_time.value + tx_length[b_type].value; \
+                	               	break; \
+				} \
+			} \
 		} \
 		if(batching == 0){ \
                 	counters[local_thread_id].value = INACTIVE; \
@@ -434,9 +444,12 @@ __TM_begin_rot (void* const TM_buff)
 	        	__TM_resume(); \
 /*			 QUIESCENCE_CALL_ROT();*/ \
 			__TM_end(); \
+			/*stats_array[local_thread_id].ends++; */\
 			counters[local_thread_id].value = FINISHED; \
 			/*printf("thread %d committed in ROT with counters %lu and rot_counters %d\n",local_thread_id,counters[local_thread_id].value,rot_counters[local_thread_id].value); */\
 		} else { \
+/*printf("batching type  %d\n",b_type); */\
+			stats_array[local_thread_id].begins++; \
 			__TM_resume(); \
 		} \
                 if(ro) stats_array[local_thread_id].read_commits++; \
@@ -450,6 +463,19 @@ __TM_begin_rot (void* const TM_buff)
 	/*printf("thread %d committed\n",local_thread_id); */\
 };
 
+# define RELEASE_BATCHING_WRITE_LOCK(){ \
+       __TM_suspend(); \
+       counters[local_thread_id].value = INACTIVE; \
+       rmb(); \
+       QUIESCENCE_CALL_ROT(); \
+       __TM_resume(); \
+/*     QUIESCENCE_CALL_ROT();*/ \
+       __TM_end(); \
+       /*stats_array[local_thread_id].ends++; */\
+       counters[local_thread_id].value = FINISHED; \
+       /*printf("thread %d committed in ROT with counters %lu and rot_counters %d\n",local_thread_id,counters[local_thread_id].value,rot_counters[local_thread_id].value); */\
+};
+
 # define TM_BEGIN_EXT(b,ro) {  \
         num_threads = global_numThread; \
 	local_exec_mode = 0; \
@@ -458,10 +484,14 @@ __TM_begin_rot (void* const TM_buff)
 	if(batching > 0){ \
 		padded_scalar start_time; \
         	READ_TIMESTAMP(start_time.value); \
-        	counters[local_thread_id].value = start_time.value + tx_length[b_type].value; \
-		if(counters[local_thread_id].value > batching){ \
-			RELEASE_WRITE_LOCK(); \
+        	padded_scalar counter; \
+		counter.value = start_time.value + tx_length[b_type].value; \
+		if(counter.value > batching){ \
+			RELEASE_BATCHING_WRITE_LOCK(); \
 			ACQUIRE_WRITE_LOCK(); \
+		} \
+		else {\
+			stats_array[local_thread_id].ends++;\
 		} \
 	} else{ \
 		ACQUIRE_WRITE_LOCK(); \

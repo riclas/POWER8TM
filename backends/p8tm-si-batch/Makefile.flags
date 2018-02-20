@@ -1,5 +1,5 @@
-CFLAGS   += -w $(HTM_RETRIES) $(ROT_RETRIES) $(WAIT_RATIO)
+CFLAGS   += -w $(HTM_RETRIES) $(ROT_RETRIES) $(BATCH_RATIO)
 
 CPPFLAGS := $(CFLAGS)
-LIBS     += $(CPPFLAGS) -lrt -lpthread -mcpu=power8 -mtune=power8 -lboost_system -lm
+LIBS     += $(CPPFLAGS) -lrt -lpthread -mcpu=power8 -mtune=power8 -lm
 LDFLAGS  += $(LIBS)
