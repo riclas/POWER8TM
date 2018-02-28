@@ -110,8 +110,8 @@ static int N_BUCKETS = 512;
 List** bucket;
 List** big_bucket;
 long range;
-__thread long myOps;
-__thread long longOps=0;
+__thread padded_scalar myOps;
+__thread padded_scalar longOps;
 
 TM_CALLABLE
 long hm_insert_htm(TM_ARGDECL List* set, long val)
@@ -374,49 +374,49 @@ long set_add_seq(List** buck, long val) {
 
 long set_add(TM_ARGDECL long val)
 {
-    int res = 0;
-    int ro = 0;
+    padded_scalar res;res.value = 0;
+    padded_scalar ro;ro.value = 0;
 
     if(rand() % 100 < (100-10*BATCH_RATIO)){
-        TM_BEGIN_EXT(0,ro);
+        TM_BEGIN_EXT(0,ro.value);
 	for(int i = 0; i < BATCH_RATIO; i++)
         	//res = (local_exec_mode == 3 || local_exec_mode == 1 || local_exec_mode == 4) ? priv_insert_stm(TM_ARG bucket, val+i)
-		res = priv_insert_htm(TM_ARG bucket, val+i);
+		res.value = priv_insert_htm(TM_ARG bucket, val+i);
         TM_END();
-	myOps-=BATCH_RATIO;
+	myOps.value-=BATCH_RATIO;
     } else {
-        TM_BEGIN_EXT(3,ro);
-        for(int i = 0; i < 10; i++)
+        TM_BEGIN_EXT(3,ro.value);
+        for(int i = 0; i < 5; i++)
                	//res = (local_exec_mode == 3 || local_exec_mode == 1 || local_exec_mode == 4) ? priv_insert_stm(TM_ARG bucket, val+i)
-                res = priv_insert_htm(TM_ARG bucket, val+i);
+                res.value = priv_insert_htm(TM_ARG bucket, val+i);
         TM_END();
-	myOps--;
-	longOps++;
+	myOps.value--;
+	longOps.value++;
     }
-    return res;
+    return res.value;
 }
 
 int set_remove(TM_ARGDECL long val)
 {
-    int res = 0;
-    int ro = 0;
+    padded_scalar res;res.value = 0;
+    padded_scalar ro;ro.value=0;
     if(rand() % 100 < (100-10*BATCH_RATIO)){
-        TM_BEGIN_EXT(1,ro);
+        TM_BEGIN_EXT(1,ro.value);
         for(int i = 0; i < BATCH_RATIO; i++)
 	        //res = (local_exec_mode == 2 || local_exec_mode == 1 || local_exec_mode == 4) ? priv_remove_item_stm(TM_ARG bucket, val+i)
-	        res = priv_remove_item_htm(TM_ARG bucket, val+i);
+	        res.value = priv_remove_item_htm(TM_ARG bucket, val+i);
         TM_END();
-	myOps-=BATCH_RATIO;
+	myOps.value-=BATCH_RATIO;
     } else {
-	TM_BEGIN_EXT(4,ro);
-        for(int i = 0; i < 10; i++)
+	TM_BEGIN_EXT(4,ro.value);
+        for(int i = 0; i < 5; i++)
         //res = (local_exec_mode == 3 || local_exec_mode == 1 || local_exec_mode == 4) ? priv_remove_item_stm(TM_ARG bucket, val+i)
-                res = priv_remove_item_htm(TM_ARG bucket, val+i);
+                res.value = priv_remove_item_htm(TM_ARG bucket, val+i);
         TM_END();
-	myOps--;
-	longOps++;
+	myOps.value--;
+	longOps.value++;
     }
-    return res;
+    return res.value;
 }
 
 long set_contains(TM_ARGDECL long  val)
@@ -428,7 +428,7 @@ long set_contains(TM_ARGDECL long  val)
     //res = (local_exec_mode == 3 || local_exec_mode == 1 || local_exec_mode == 4) ? priv_lookup_stm(TM_ARG val) : 
     priv_lookup_htm(TM_ARG val);
     TM_END();
-    myOps--;
+    myOps.value--;
 
     return res;
 }
@@ -452,21 +452,21 @@ void *test(void *data)
 
   unsigned int mySeed = seed + sched_getcpu();
 
-  myOps = operations / nb_threads * (1-0.1*(BATCH_RATIO-1));
-  long val = -1;
-  int op;
+  myOps.value = operations / nb_threads * (1-0.1*(BATCH_RATIO-1));
+  padded_scalar val; val.value = -1;
+  padded_scalar op;
 
-  while (myOps > 0) {
-    op = rand_r(&mySeed) % 100;
-    if (op < update) {
-      if (val == -1) {
-        val = (rand_r(&mySeed) % range) + 1;
-        if(set_add(TM_ARG val) == 0) {
-          val = -1;
+  while (myOps.value > 0) {
+    op.value = rand_r(&mySeed) % 100;
+    if (op.value < update) {
+      if (val.value == -1) {
+        val.value = (rand_r(&mySeed) % range) + 1;
+        if(set_add(TM_ARG val.value) == 0) {
+          val.value = -1;
         }
       } else {
-        set_remove(TM_ARG  val);
-        val = -1;
+        set_remove(TM_ARG  val.value);
+        val.value = -1;
       }
     } else {
       long tmp = (rand_r(&mySeed) % range) + 1;
@@ -475,7 +475,7 @@ void *test(void *data)
   }
 
   TM_THREAD_EXIT();
-printf("long ops: %d\n",longOps);
+printf("long ops: %d\n",longOps.value);
   return NULL;
 }
 
