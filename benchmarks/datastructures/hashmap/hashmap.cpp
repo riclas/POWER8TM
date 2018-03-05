@@ -61,9 +61,9 @@ __thread TIMER_T start_time;
 long global_numThread;
 long alpha;
 int running;
-__thread long b_type;
- __thread long num_threads;
-__thread long counters_snapshot[80];
+__thread  __attribute__((aligned(CACHE_LINE_SIZE))) padded_scalar_t b_type;
+__thread long num_threads;
+__thread __attribute__((aligned(CACHE_LINE_SIZE))) padded_scalar_t counters_snapshot[80];
 __thread long actions[81][81];
 __thread long to_save[81];
 __thread long kill_ignored;
@@ -71,7 +71,7 @@ __thread long kill_index;
 __thread long kill_cansave;
 __thread long kill_acc;
 __thread long kill_index2;
-__thread long batching=0;
+__thread __attribute__((aligned(CACHE_LINE_SIZE))) padded_scalar_t batching;
 
 __thread long rs_mask_2 = 0xffffffffffff0000;
 __thread long rs_mask_4 = 0xffffffff00000000;
@@ -376,19 +376,24 @@ long set_add(TM_ARGDECL long val)
 {
     padded_scalar res;res.value = 0;
     padded_scalar ro;ro.value = 0;
+    padded_scalar type;
 
     if(rand() % 100 < (100-10*BATCH_RATIO)){
-        TM_BEGIN_EXT(0,ro.value);
-	for(int i = 0; i < BATCH_RATIO; i++)
+	type.value = 0;
+        TM_BEGIN_EXT(type.value, ro.value);
+	for(int i = 0; i < BATCH_RATIO; i++){
         	//res = (local_exec_mode == 3 || local_exec_mode == 1 || local_exec_mode == 4) ? priv_insert_stm(TM_ARG bucket, val+i)
 		res.value = priv_insert_htm(TM_ARG bucket, val+i);
+	}
         TM_END();
 	myOps.value-=BATCH_RATIO;
     } else {
-        TM_BEGIN_EXT(3,ro.value);
-        for(int i = 0; i < 5; i++)
+	type.value = 3;
+        TM_BEGIN_EXT(type.value, ro.value);
+        for(int i = 0; i < 10; i++){
                	//res = (local_exec_mode == 3 || local_exec_mode == 1 || local_exec_mode == 4) ? priv_insert_stm(TM_ARG bucket, val+i)
-                res.value = priv_insert_htm(TM_ARG bucket, val+i);
+                res.value = priv_insert_htm(TM_ARG bucket, (val+1000*i)%range);
+	}
         TM_END();
 	myOps.value--;
 	longOps.value++;
@@ -398,20 +403,26 @@ long set_add(TM_ARGDECL long val)
 
 int set_remove(TM_ARGDECL long val)
 {
-    padded_scalar res;res.value = 0;
-    padded_scalar ro;ro.value=0;
+    padded_scalar res; res.value = 0;
+    padded_scalar ro; ro.value=0;
+    padded_scalar type;
+
     if(rand() % 100 < (100-10*BATCH_RATIO)){
-        TM_BEGIN_EXT(1,ro.value);
-        for(int i = 0; i < BATCH_RATIO; i++)
+	type.value = 1;
+        TM_BEGIN_EXT(type.value, ro.value);
+        for(int i = 0; i < BATCH_RATIO; i++){
 	        //res = (local_exec_mode == 2 || local_exec_mode == 1 || local_exec_mode == 4) ? priv_remove_item_stm(TM_ARG bucket, val+i)
 	        res.value = priv_remove_item_htm(TM_ARG bucket, val+i);
+	}
         TM_END();
 	myOps.value-=BATCH_RATIO;
     } else {
-	TM_BEGIN_EXT(4,ro.value);
-        for(int i = 0; i < 5; i++)
+	type.value = 4;
+	TM_BEGIN_EXT(type.value ,ro.value);
+        for(int i = 0; i < 10; i++){
         //res = (local_exec_mode == 3 || local_exec_mode == 1 || local_exec_mode == 4) ? priv_remove_item_stm(TM_ARG bucket, val+i)
-                res.value = priv_remove_item_htm(TM_ARG bucket, val+i);
+                res.value = priv_remove_item_htm(TM_ARG bucket, (val+1000*i)%range);
+	}
         TM_END();
 	myOps.value--;
 	longOps.value++;
@@ -421,16 +432,17 @@ int set_remove(TM_ARGDECL long val)
 
 long set_contains(TM_ARGDECL long  val)
 {
-    long res = 0;
+    padded_scalar res; res.value = 0;
+    padded_scalar ro; ro.value = 1;
+    padded_scalar type; type.value = 2;
 
-    int ro = 1;
-    TM_BEGIN_EXT(2, ro);
+    TM_BEGIN_EXT(type.value, ro.value);
     //res = (local_exec_mode == 3 || local_exec_mode == 1 || local_exec_mode == 4) ? priv_lookup_stm(TM_ARG val) : 
     priv_lookup_htm(TM_ARG val);
     TM_END();
     myOps.value--;
 
-    return res;
+    return res.value;
 }
 
 #include <sched.h>
@@ -461,11 +473,14 @@ void *test(void *data)
     if (op.value < update) {
       if (val.value == -1) {
         val.value = (rand_r(&mySeed) % range) + 1;
-        if(set_add(TM_ARG val.value) == 0) {
+        padded_scalar res;
+        res.value = set_add(TM_ARG val.value);
+	if(res.value == 0) {
           val.value = -1;
         }
       } else {
-        set_remove(TM_ARG  val.value);
+        padded_scalar res;
+	res.value = set_remove(TM_ARG  val.value);
         val.value = -1;
       }
     } else {

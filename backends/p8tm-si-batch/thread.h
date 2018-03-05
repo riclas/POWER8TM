@@ -165,9 +165,9 @@ extern long alpha;
 extern int running;
 extern __thread unsigned int local_thread_id;
 extern __thread unsigned int local_exec_mode;
-extern __thread long b_type;
+extern __thread  __attribute__((aligned(CACHE_LINE_SIZE))) padded_scalar_t b_type;
 extern __thread long num_threads;
-extern __thread long counters_snapshot[80];
+extern __thread __attribute__((aligned(CACHE_LINE_SIZE))) padded_scalar_t counters_snapshot[80];
 extern __thread long actions[81][81];
 extern __thread long to_save[81];
 extern __thread long kill_ignored;
@@ -175,7 +175,7 @@ extern __thread long kill_index;
 extern __thread long kill_cansave;
 extern __thread long kill_acc;
 extern __thread long kill_index2;
-extern __thread long batching;
+extern __thread  __attribute__((aligned(CACHE_LINE_SIZE))) padded_scalar_t batching;
 
 #ifndef REDUCED_TM_API
 
