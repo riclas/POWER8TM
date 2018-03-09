@@ -113,6 +113,32 @@ long range;
 __thread padded_scalar myOps;
 __thread padded_scalar longOps;
 
+padded_scalar mySeed;
+
+long my_rand_r (long *seed)
+{
+  padded_scalar next; next.value = *seed;
+  padded_scalar result;
+
+  next.value *= 1103515245;
+  next.value += 12345;
+  result.value = (unsigned int) (next.value / 65536) % 2048;
+
+  next.value *= 1103515245;
+  next.value += 12345;
+  result.value <<= 10;
+  result.value ^= (unsigned int) (next.value / 65536) % 1024;
+
+  next.value *= 1103515245;
+  next.value += 12345;
+  result.value <<= 10;
+  result.value ^= (unsigned int) (next.value / 65536) % 1024;
+
+  *seed = next.value;
+
+  return result.value;
+}
+
 TM_CALLABLE
 long hm_insert_htm(TM_ARGDECL List* set, long val)
 {
@@ -378,9 +404,10 @@ long set_add(TM_ARGDECL long val)
     padded_scalar ro;ro.value = 0;
     padded_scalar type;
 
-    if(rand() % 100 < (100-10*BATCH_RATIO)){
+//    TM_BEGIN_EXT(type.value, ro.value);
+    if(rand_r((int*)&mySeed.value) % 100 < (100-10*BATCH_RATIO)){
 	type.value = 0;
-        TM_BEGIN_EXT(type.value, ro.value);
+        TM_BEGIN_EXT(type.value, ro.value); //rand_r((int*)&mySeed.value);
 	for(int i = 0; i < BATCH_RATIO; i++){
         	//res = (local_exec_mode == 3 || local_exec_mode == 1 || local_exec_mode == 4) ? priv_insert_stm(TM_ARG bucket, val+i)
 		res.value = priv_insert_htm(TM_ARG bucket, val+i);
@@ -389,8 +416,8 @@ long set_add(TM_ARGDECL long val)
 	myOps.value-=BATCH_RATIO;
     } else {
 	type.value = 3;
-        TM_BEGIN_EXT(type.value, ro.value);
-        for(int i = 0; i < 10; i++){
+        TM_BEGIN_EXT(type.value, ro.value); rand_r((int*)&mySeed.value);
+        for(int i = 0; i < 5; i++){
                	//res = (local_exec_mode == 3 || local_exec_mode == 1 || local_exec_mode == 4) ? priv_insert_stm(TM_ARG bucket, val+i)
                 res.value = priv_insert_htm(TM_ARG bucket, (val+1000*i)%range);
 	}
@@ -398,6 +425,7 @@ long set_add(TM_ARGDECL long val)
 	myOps.value--;
 	longOps.value++;
     }
+//    TM_END();
     return res.value;
 }
 
@@ -407,9 +435,9 @@ int set_remove(TM_ARGDECL long val)
     padded_scalar ro; ro.value=0;
     padded_scalar type;
 
-    if(rand() % 100 < (100-10*BATCH_RATIO)){
+    if(rand_r((int*)&mySeed.value) % 100 < (100-10*BATCH_RATIO)){
 	type.value = 1;
-        TM_BEGIN_EXT(type.value, ro.value);
+        TM_BEGIN_EXT(type.value, ro.value); //rand_r((int*)&mySeed.value);
         for(int i = 0; i < BATCH_RATIO; i++){
 	        //res = (local_exec_mode == 2 || local_exec_mode == 1 || local_exec_mode == 4) ? priv_remove_item_stm(TM_ARG bucket, val+i)
 	        res.value = priv_remove_item_htm(TM_ARG bucket, val+i);
@@ -418,8 +446,8 @@ int set_remove(TM_ARGDECL long val)
 	myOps.value-=BATCH_RATIO;
     } else {
 	type.value = 4;
-	TM_BEGIN_EXT(type.value ,ro.value);
-        for(int i = 0; i < 10; i++){
+	TM_BEGIN_EXT(type.value ,ro.value); //rand_r((int*)&mySeed.value);
+        for(int i = 0; i < 5; i++){
         //res = (local_exec_mode == 3 || local_exec_mode == 1 || local_exec_mode == 4) ? priv_remove_item_stm(TM_ARG bucket, val+i)
                 res.value = priv_remove_item_htm(TM_ARG bucket, (val+1000*i)%range);
 	}
@@ -462,17 +490,18 @@ void *test(void *data)
 
   TM_THREAD_ENTER();
 
-  unsigned int mySeed = seed + sched_getcpu();
-
+  mySeed.value = seed + sched_getcpu();
+printf("%d %d %d \n", mySeed.value, seed, sched_getcpu());
   myOps.value = operations / nb_threads * (1-0.1*(BATCH_RATIO-1));
   padded_scalar val; val.value = -1;
   padded_scalar op;
 
   while (myOps.value > 0) {
-    op.value = rand_r(&mySeed) % 100;
+    op.value = rand_r((int*)&mySeed.value) % 100;
+
     if (op.value < update) {
       if (val.value == -1) {
-        val.value = (rand_r(&mySeed) % range) + 1;
+        val.value = (rand_r((int*)&mySeed.value) % range) + 1;
         padded_scalar res;
         res.value = set_add(TM_ARG val.value);
 	if(res.value == 0) {
@@ -484,7 +513,7 @@ void *test(void *data)
         val.value = -1;
       }
     } else {
-      long tmp = (rand_r(&mySeed) % range) + 1;
+      long tmp = (rand_r((int*)&mySeed.value) % range) + 1;
       set_contains(TM_ARG tmp);
     }
   }
