@@ -4,4 +4,4 @@ add -save-temps to CFLAGS
 build
 grep ^[^\#].*$ hashmap.ii > hashmapii
 sed 's/; \?/;\n/g' hashmapii > hashmapii.cpp
-g++ -lpthread -std=c++11 -gdwarf-2 -g3 -w -pthread -fpermissive -mcpu=power8 -mtune=power8 -O0 -I../lib -w -DHTM_RETRIES=0 -DROT_RETRIES=2 -DWAIT_RATIO=1 -save-temps -lrt -lpthread -mcpu=power8 -mtune=power8 -lboost_system -lm hashmapii.cpp ../lib/mt19937ar.o ../lib/random.o ../lib/thread.o -lpthread -std=c++11 -gdwarf-2 -g3 -w -pthread -fpermissive -mcpu=power8 -mtune=power8 -O0 -I../lib -w -DHTM_RETRIES=0 -DROT_RETRIES=2 -DWAIT_RATIO=1 -lrt -lpthread -mcpu=power8 -mtune=power8 -lboost_system -lm -o hashmap
+g++ -lpthread -std=c++11 -gdwarf-2 -g3 -w -pthread -fpermissive -mcpu=power8 -mtune=power8 -O0 -I../lib -w -DHTM_RETRIES=0 -DROT_RETRIES=2 -DWAIT_RATIO=1 -save-temps -lrt -lpthread -mcpu=power8 -mtune=power8 -lm hashmapii.cpp ../lib/mt19937ar.o ../lib/random.o ../lib/thread.o -lpthread -std=c++11 -gdwarf-2 -g3 -w -pthread -fpermissive -mcpu=power8 -mtune=power8 -O0 -I../lib -w -DHTM_RETRIES=0 -DROT_RETRIES=2 -DWAIT_RATIO=1 -lrt -lpthread -mcpu=power8 -mtune=power8 -lm -o hashmap

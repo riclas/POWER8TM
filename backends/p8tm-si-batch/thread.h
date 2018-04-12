@@ -175,8 +175,8 @@ extern __thread long kill_cansave;
 extern __thread long kill_acc;
 extern __thread long kill_index2;
 extern __thread __attribute__((aligned(CACHE_LINE_SIZE))) padded_scalar_t start_time;
-
-extern __thread  __attribute__((aligned(CACHE_LINE_SIZE))) padded_scalar_t batching;
+extern __thread int ro;
+extern __thread __attribute__((aligned(CACHE_LINE_SIZE))) padded_scalar_t batching;
 
 #ifndef REDUCED_TM_API
 

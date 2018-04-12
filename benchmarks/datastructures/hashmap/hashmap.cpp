@@ -69,8 +69,8 @@ __thread long kill_index;
 __thread long kill_cansave;
 __thread long kill_acc;
 __thread long kill_index2;
-__thread __attribute__((aligned(CACHE_LINE_SIZE))) padded_scalar_t batching;
-
+__thread padded_scalar batching;
+__thread int ro;
 __thread padded_scalar start_time;
 
 
@@ -109,36 +109,10 @@ static volatile int stop;
 static int N_BUCKETS = 512;
 
 List** bucket;
-List** big_bucket;
 long range;
-__thread padded_scalar myOps;
-__thread padded_scalar longOps;
-
+__thread long myOps;
 __thread padded_scalar mySeed;
 
-long my_rand_r (long *seed)
-{
-  padded_scalar next; next.value = *seed;
-  padded_scalar result;
-
-  next.value *= 1103515245;
-  next.value += 12345;
-  result.value = (unsigned int) (next.value / 65536) % 2048;
-
-  next.value *= 1103515245;
-  next.value += 12345;
-  result.value <<= 10;
-  result.value ^= (unsigned int) (next.value / 65536) % 1024;
-
-  next.value *= 1103515245;
-  next.value += 12345;
-  result.value <<= 10;
-  result.value ^= (unsigned int) (next.value / 65536) % 1024;
-
-  *seed = next.value;
-
-  return result.value;
-}
 
 TM_CALLABLE
 long hm_insert_htm(TM_ARGDECL List* set, long val)
@@ -148,7 +122,6 @@ long hm_insert_htm(TM_ARGDECL List* set, long val)
         Node_HM* curr = FAST_PATH_SHARED_READ_P(prev->m_next);
 
         while (curr != NULL) {
-		//temp = FAST_PATH_SHARED_READ(curr->m_val);
                 if (FAST_PATH_SHARED_READ(curr->m_val) >= val)
                         break;
                 prev = curr;
@@ -401,87 +374,65 @@ long set_add_seq(List** buck, long val) {
 
 long set_add(TM_ARGDECL long val)
 {
-    padded_scalar res;res.value = 0;
-    padded_scalar ro;ro.value = 0;
-    /*int res=0;
-    int ro=0;*/
-    padded_scalar type;
+    int res = 0;
+    ro=0;
 
-//    TM_BEGIN_EXT(type.value, ro.value);
     if(rand_r((int*)&mySeed.value) % 100 < (100-10*BATCH_RATIO)){
-	type.value = 0;
-        TM_BEGIN_EXT(type.value, ro.value); //rand_r((int*)&mySeed.value);
-//	padded_scalar i;
-//	for(i.value = 0; i.value < BATCH_RATIO; i.value++){
-        	//res = (local_exec_mode == 3 || local_exec_mode == 1 || local_exec_mode == 4) ? priv_insert_stm(TM_ARG bucket, val+i)
-		res.value = priv_insert_htm(TM_ARG bucket, val);
-//	}
+        TM_BEGIN_EXT(0, ro);
+
+	res = priv_insert_htm(TM_ARG bucket, val);
+
         TM_END();
-	myOps.value-=BATCH_RATIO;
+	myOps-=BATCH_RATIO;
     } else {
-	type.value = 3;
-        TM_BEGIN_EXT(type.value, ro.value); //rand_r((int*)&mySeed.value);
-	padded_scalar i;
-        for(i.value = 0; i.value < 10; i.value++){
-               	//res = (local_exec_mode == 3 || local_exec_mode == 1 || local_exec_mode == 4) ? priv_insert_stm(TM_ARG bucket, val+i)
-                res.value = priv_insert_htm(TM_ARG bucket, val+i.value);
+        TM_BEGIN_EXT(3, ro);
+
+        for(int i = 0; i < 10; i++){
+                res = priv_insert_htm(TM_ARG bucket, val+i);
 	}
         TM_END();
-	myOps.value--;
-	longOps.value++;
+	myOps--;
     }
-//    TM_END();
-    return res.value;
+
+    return res;
 }
 
 int set_remove(TM_ARGDECL long val)
 {
-    padded_scalar res; res.value = 0;
-    padded_scalar ro; ro.value=0;
-    /*int res=0;
-    int ro=0;*/
-    padded_scalar type;
+    int res = 0;
+    ro=0;
 
     if(rand_r((int*)&mySeed.value) % 100 < (100-10*BATCH_RATIO)){
-	type.value = 1;
-        TM_BEGIN_EXT(type.value, ro.value); //rand_r((int*)&mySeed.value);
-//        padded_scalar i;
-//	for(i.value = 0; i.value < BATCH_RATIO; i.value++){
-	        //res = (local_exec_mode == 2 || local_exec_mode == 1 || local_exec_mode == 4) ? priv_remove_item_stm(TM_ARG bucket, val+i)
-	        res.value = priv_remove_item_htm(TM_ARG bucket, val);
-//	}
+        TM_BEGIN_EXT(1, ro);
+
+        res = priv_remove_item_htm(TM_ARG bucket, val);
+
         TM_END();
-	myOps.value-=BATCH_RATIO;
+	myOps-=BATCH_RATIO;
     } else {
-	type.value = 4;
-	TM_BEGIN_EXT(type.value ,ro.value); //rand_r((int*)&mySeed.value);
-	padded_scalar i;
-        for(i.value = 0; i.value < 10; i.value++){
-        //res = (local_exec_mode == 3 || local_exec_mode == 1 || local_exec_mode == 4) ? priv_remove_item_stm(TM_ARG bucket, val+i)
-                res.value = priv_remove_item_htm(TM_ARG bucket, val+i.value);
+	TM_BEGIN_EXT(4,ro);
+
+        for(int i = 0; i < 10; i++){
+                res = priv_remove_item_htm(TM_ARG bucket, val+i);
 	}
         TM_END();
-	myOps.value--;
-	longOps.value++;
+	myOps--;
     }
-    return res.value;
+    return res;
 }
 
 long set_contains(TM_ARGDECL long  val)
 {
-    padded_scalar res; res.value = 0;
-    padded_scalar ro; ro.value = 1;
-/*    int res=0;
-    int ro=1;*/
-    padded_scalar type; type.value = 2;
+    int res = 0;
+    ro = 1;
 
-    TM_BEGIN_EXT(type.value, ro.value);
-    //res = (local_exec_mode == 3 || local_exec_mode == 1 || local_exec_mode == 4) ? priv_lookup_stm(TM_ARG val) : 
+    TM_BEGIN_EXT(2, ro);
+
     priv_lookup_htm(TM_ARG val);
     TM_END();
-    myOps.value--;
+    myOps--;
 
-    return res.value;
+    return res;
 }
 
 #include <sched.h>
@@ -503,25 +454,23 @@ void *test(void *data)
 
   mySeed.value = seed + sched_getcpu();
 
-  myOps.value = operations / nb_threads * (1-0.1*(BATCH_RATIO-1));
-  padded_scalar val; val.value = -1;
-  padded_scalar op;
+  myOps = operations / nb_threads * (1-0.1*(BATCH_RATIO-1));
+  int val = -1;
+  int op;
 
-  while (myOps.value > 0) {
-    op.value = rand_r((int*)&mySeed.value) % 100;
+  while (myOps > 0) {
+    op = rand_r((int*)&mySeed.value) % 100;
 
-    if (op.value < update) {
-      if (val.value == -1) {
-        val.value = (rand_r((int*)&mySeed.value) % range) + 1;
-        padded_scalar res;
-        res.value = set_add(TM_ARG val.value);
-	if(res.value == 0) {
-          val.value = -1;
+    if (op < update) {
+      if (val == -1) {
+        val = (rand_r((int*)&mySeed.value) % range) + 1;
+        int res = set_add(TM_ARG val);
+	if(res == 0) {
+          val = -1;
         }
       } else {
-        padded_scalar res;
-	res.value = set_remove(TM_ARG  val.value);
-        val.value = -1;
+	int res = set_remove(TM_ARG  val);
+        val = -1;
       }
     } else {
       long tmp = (rand_r((int*)&mySeed.value) % range) + 1;
@@ -530,7 +479,7 @@ void *test(void *data)
   }
 
   TM_THREAD_EXIT();
-printf("long ops: %d\n",longOps.value);
+
   return NULL;
 }
 
@@ -651,15 +600,6 @@ MAIN(argc, argv) {
     bucket[i]->sentinel->m_next = NULL;
   }
 
-  big_bucket = (List**) malloc(N_BUCKETS*sizeof(List*));
-
-  for (i = 0; i < N_BUCKETS; i++) {
-    big_bucket[i] = (List*) malloc (sizeof(List));
-    big_bucket[i]->sentinel = (Node_HM*) malloc(sizeof(Node_HM));
-    big_bucket[i]->sentinel->m_val = LONG_MIN;
-    big_bucket[i]->sentinel->m_next = NULL;
-  }
-
   /* Populate set */
   printf("Adding %d entries to set\n", initial);
   for (i = 0; i < initial; i++) {
@@ -667,11 +607,6 @@ MAIN(argc, argv) {
     set_add_seq(bucket, val);
   }
 
-/*  for (long x = 0; x < initial*2; x++) {
-    val = (rand() % (range*2)) + 1;
-    set_add_seq(big_bucket, val);
-  }
-*/
   puts("Added\n");
   seed = rand();
   TIMER_READ(start);

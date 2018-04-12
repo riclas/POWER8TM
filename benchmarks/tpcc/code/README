@@ -19,13 +19,6 @@ are bugs, problems, fixes, or questions, please let me know.
 I have another implementation that supports "locking." If you are interested
 in this, talk to me.
 
-This is configured to look for "boost" in the directory above the check out.
-I generally have my code configured like this:
-
-tpccstuff/boost - A copy of the boost directory
-tpccstuff/tpccbench
-
-
 Overview of the code:
 
 Everything that ends in _test is a unit test to verify that the code is correct.

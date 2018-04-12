@@ -12,8 +12,6 @@ On older Linux systems, this is required for glibc to define std::posix_memalign
 #include <stdlib.h>
 #include <string.h>
 
-#include <boost/pool/object_pool.hpp>
-
 #include "tm.h"
 
 // DEBUG
@@ -43,9 +41,9 @@ class BPlusTree
 public:
         // N must be greater than two to make the split of
         // two inner nodes sensible.
-        BOOST_STATIC_ASSERT(N>2);
+	static_assert(N>2);
         // Leaf nodes must be able to hold at least one element
-        BOOST_STATIC_ASSERT(M>0);
+	static_assert(M>0);
 
         // Builds a new empty tree.
         BPlusTree()
@@ -59,7 +57,6 @@ public:
 
         ~BPlusTree() {
                 // Empty. Memory deallocation is done automatically
-                // when innerPool and leafPool are destroyed.
         }
 
         // Inserts a pair (key, value). If there is a previous pair with
@@ -436,7 +433,6 @@ private:
         __attribute__((transaction_safe)) inline LeafNode* new_leaf_node() {
                 LeafNode* result = (LeafNode*) malloc(sizeof(LeafNode));
                 initLeafNode(result);
-                // result= leafPool.construct();
                 //cout << "New LeafNode at " << result << endl;
                 return result;
         }
@@ -445,7 +441,6 @@ private:
         __attribute__((transaction_safe)) inline InnerNode* new_inner_node() {
                 InnerNode* result = (InnerNode*) malloc(sizeof(InnerNode));
                 initInnerNode(result);
-                // result= innerPool.construct();
                 //cout << "New InnerNode at " << result << endl;
                 return result;
         }
@@ -833,8 +828,6 @@ private:
         // Node memory allocators. IMPORTANT NOTE: they must be declared
         // before the root to make sure that they are properly initialised
         // before being used to allocate any node.
-        boost::object_pool<InnerNode, AlignedAllocator> innerPool;
-        boost::object_pool<LeafNode, AlignedAllocator>  leafPool;
         // Depth of the tree. A tree of depth 0 only has a leaf node.
         unsigned long depth;
         // Pointer to the root node. It may be a leaf or an inner node, but

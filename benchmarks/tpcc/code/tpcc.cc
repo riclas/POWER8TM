@@ -41,17 +41,37 @@ __thread unsigned long cm_seed = 123456789UL;
 
 __attribute__((aligned(CACHE_LINE_SIZE))) padded_statistics_t stats_array[80];
 
-__attribute__((aligned(CACHE_LINE_SIZE))) pthread_spinlock_t single_global_lock = 0;
-__attribute__((aligned(CACHE_LINE_SIZE))) pthread_spinlock_t fallback_in_use = 0;
+long total_first_time;
+long total_second_time;
 
+__attribute__((aligned(CACHE_LINE_SIZE))) pthread_spinlock_t single_global_lock;
 
 __attribute__((aligned(CACHE_LINE_SIZE))) padded_scalar_t counters[80];
+
+__attribute__((aligned(CACHE_LINE_SIZE))) padded_scalar_t tx_length[10];
+
 __attribute__((aligned(CACHE_LINE_SIZE))) padded_scalar_t triggers[80];
-__attribute__((aligned(CACHE_LINE_SIZE))) pthread_spinlock_t writers_lock = 0;
 
 __thread unsigned int local_exec_mode = 0;
 
 __thread unsigned int local_thread_id;
+
+long global_numThread;
+long alpha;
+int running;
+__thread __attribute__((aligned(CACHE_LINE_SIZE))) padded_scalar_t b_type;
+__thread long num_threads;
+__thread long counters_snapshot[80];
+__thread long actions[81][81];
+__thread long to_save[81];
+__thread long kill_ignored;
+__thread long kill_index;
+__thread long kill_cansave;
+__thread long kill_acc;
+__thread long kill_index2;
+__thread padded_scalar batching;
+__thread int ro;
+__thread padded_scalar start_time;
 
 __thread long rs_mask_2 = 0xffffffffffff0000;
 __thread long rs_mask_4 = 0xffffffff00000000;

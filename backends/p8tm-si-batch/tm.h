@@ -140,7 +140,8 @@ __TM_begin_rot (void* const TM_buff)
   return 0;
 }
 
-#  define TM_STARTUP(numThread, bId) num_threads = numThread; /*tx_length[0].value=1; tx_length[1].value=1; tx_length[2].value=1; tx_length[3].value=10000; tx_length[4].value=10000; tx_length[5].value=10000; /*running = 1; hc_start();*/
+#  define TM_STARTUP(numThread, bId) num_threads = numThread;
+
 #  define TM_SHUTDOWN(){ \
     running = 0; \
     unsigned long begins = 0; \
@@ -224,11 +225,12 @@ __TM_begin_rot (void* const TM_buff)
 } \
 
 #  define TM_THREAD_ENTER() local_thread_id = SPECIAL_THREAD_ID();
+
 #  define TM_THREAD_EXIT()
 
-# define IS_LOCKED(lock)        *((volatile long*)(&lock)) != 0
+# define IS_LOCKED(lock)         *((volatile int*)(&lock)) != 0
 
-# define IS_GLOBAL_LOCKED(lock)        *((volatile long*)(&lock)) == 1
+# define IS_GLOBAL_LOCKED(lock)        *((volatile int*)(&lock)) == 1
 
 # define TM_BEGIN(ro) TM_BEGIN_EXT(0,ro)
 
@@ -238,7 +240,7 @@ __TM_begin_rot (void* const TM_buff)
 
 # define INACTIVE -1
 
-# define USE_ROT(){ \
+# define USE_ROT(b){ \
 	int rot_budget = ROT_RETRIES; \
 	while(IS_LOCKED(single_global_lock)){ \
         	cpu_relax(); \
@@ -247,15 +249,8 @@ __TM_begin_rot (void* const TM_buff)
 		batching.value = 0; \
 		rot_status = 1; \
 		TM_buff_type TM_buff; \
-/*		memset(counters_snapshot, 0, sizeof(counters_snapshot)); \
-                memset(actions, 0, sizeof(actions)); \
-                memset(to_save, 0, sizeof(to_save)); */\
                 READ_TIMESTAMP(start_time.value); \
-                counters[local_thread_id].value = start_time.value + tx_length[type.value].value; \
-/*		memset(counters_snapshot, 0, sizeof(counters_snapshot)); \
-/*                memset(actions, 0, sizeof(actions)); \
-                memset(to_save, 0, sizeof(to_save)); \
-/*printf("tid %d b_type.value %d length %d\n",local_thread_id, b_type.value, tx_length[b_type.value].value);*/ \
+                counters[local_thread_id].value = start_time.value + tx_length[b].value; \
 		rmb(); \
 		if(IS_LOCKED(single_global_lock)){ \
 			counters[local_thread_id].value = FINISHED; \
@@ -263,39 +258,35 @@ __TM_begin_rot (void* const TM_buff)
 			while(IS_LOCKED(single_global_lock)) cpu_relax(); \
 			continue; \
 		} \
-/*		stats_array[local_thread_id].begins++;*/ \
 		unsigned char tx_status = __TM_begin_rot(&TM_buff); \
 		if (tx_status == _HTM_TBEGIN_STARTED) { \
-                        /*triggers[local_thread_id].value = 1;*/ \
                         break; \
                 } \
-		else if(__TM_conflict(&TM_buff)){ \
-                        stats_array[local_thread_id].rot_conflict_aborts++; \
-			if(__TM_is_self_conflict(&TM_buff)) stats_array[local_thread_id].rot_self_conflicts++; \
-			else if(__TM_is_trans_conflict(&TM_buff)) stats_array[local_thread_id].rot_trans_conflicts++; \
-			else if(__TM_is_nontrans_conflict(&TM_buff)) stats_array[local_thread_id].rot_nontrans_conflicts++; \
-                        rot_status = 0; \
-                        rot_budget--; \
-			counters[local_thread_id].value = INACTIVE; \
-                	rmb(); \
-                } \
-                else if (__TM_user_abort(&TM_buff)) { \
-                        stats_array[local_thread_id].rot_user_aborts ++; \
-                        rot_status = 0; \
-                        rot_budget--; \
-                } \
-                else if(__TM_capacity_abort(&TM_buff)){ \
-			rot_status = 0; \
-			stats_array[local_thread_id].rot_capacity_aborts ++; \
-			if(__TM_is_persistent_abort(&TM_buff)) stats_array[local_thread_id].rot_persistent_aborts ++; \
-                        break; \
+		else { \
+			rot_status=0; \
+			if(__TM_conflict(&TM_buff)){ \
+        	                stats_array[local_thread_id].rot_conflict_aborts++; \
+				if(__TM_is_self_conflict(&TM_buff)) stats_array[local_thread_id].rot_self_conflicts++; \
+				else if(__TM_is_trans_conflict(&TM_buff)) stats_array[local_thread_id].rot_trans_conflicts++; \
+				else if(__TM_is_nontrans_conflict(&TM_buff)) stats_array[local_thread_id].rot_nontrans_conflicts++; \
+                	        rot_budget--; \
+				counters[local_thread_id].value = INACTIVE; \
+                		rmb(); \
+                	} \
+               		else if (__TM_user_abort(&TM_buff)) { \
+                	        stats_array[local_thread_id].rot_user_aborts ++; \
+               		        rot_budget--; \
+                	} \
+                	else if(__TM_capacity_abort(&TM_buff)){ \
+				stats_array[local_thread_id].rot_capacity_aborts ++; \
+				if(__TM_is_persistent_abort(&TM_buff)) stats_array[local_thread_id].rot_persistent_aborts ++; \
+                	        break; \
+			} \
+                	else{ \
+                	        rot_budget--; \
+				stats_array[local_thread_id].rot_other_aborts ++; \
+			} \
 		} \
-                else{ \
-			rot_status = 0; \
-                        rot_budget--; \
-			stats_array[local_thread_id].rot_other_aborts ++; \
-		} \
-/*		printf("%x\n", __builtin_get_texasr());*/ \
 	} \
 };
 
@@ -316,10 +307,10 @@ __TM_begin_rot (void* const TM_buff)
 	QUIESCENCE_CALL_GL(); \
 };
 
- # define ACQUIRE_WRITE_LOCK() { \
+ # define ACQUIRE_WRITE_LOCK(b) { \
 	local_exec_mode = 1; \
 	int rot_status = 0; \
-	USE_ROT(); \
+	USE_ROT(b); \
 	if(!rot_status){ \
 		local_exec_mode = 2; \
 		ACQUIRE_GLOBAL_LOCK(); \
@@ -328,92 +319,23 @@ __TM_begin_rot (void* const TM_buff)
 };\
 
 # define QUIESCENCE_CALL_ROT(){ \
-/* 	padded_scalar num_threads; \
-	num_threads.value = global_numThread; \
-	padded_scalar kill_index; \
-	padded_scalar state; \
-        long actions[81][81]={0}; \
-        long to_save[81]={0};*/ \
-        /*long state = 0; \
-        long x = 0; \
-        padded_scalar kill_ignored; \
-	kill_ignored=0;*/ \
         padded_scalar start_wait_time; \
         READ_TIMESTAMP(start_wait_time.value); \
-	padded_scalar index; \
-/*kill_index=1;\
-counters_snapshot[0]=1;*/\
-	padded_scalar kill_idx; \
-	for(kill_idx.value=0; kill_idx.value < num_threads; kill_idx.value++){ \
-		counters_snapshot[kill_idx.value] = counters[kill_idx.value].value; \
+	for(kill_index=0; kill_index < num_threads; kill_index++){ \
+		counters_snapshot[kill_index] = counters[kill_index].value; \
 	} \
-	for(kill_idx.value=0; kill_idx.value < num_threads; kill_idx.value++){ \
-/*		if(kill_idx.value != local_thread_id) \
-/*		padded_scalar temp; \
-                temp.value = triggers[kill_index].value; /*kill large transactions*/ \
-		if(counters_snapshot[kill_idx.value] > FINISHED){ \
-			while(counters[kill_idx.value].value == counters_snapshot[kill_idx.value]){ \
-				cpu_relax(); \
+	for(kill_index=0; kill_index < num_threads; kill_index++){ \
+		if(kill_index != local_thread_id){ \
+			if(counters_snapshot[kill_index] > FINISHED){ \
+				while(counters[kill_index].value == counters_snapshot[kill_index]){ \
+					cpu_relax(); \
+				} \
 			} \
 		} \
 	} \
-/*	    padded_scalar temp; \
-            temp.value = counters[kill_index].value; \
-	    if(temp.value > FINISHED) { \
-                padded_scalar wait_needed; \
-		wait_needed.value = temp.value - end_time.value; \
-                /*printf("needed %d\n",wait_needed.value);*/ \
-/*                if(wait_needed.value > 0) { \
-                    kill_index2 = wait_needed.value/1000000; /*(tx_length[0].value*2);/*alpha*/ \
-/*printf("index2 %d\n",kill_index2);*/\
-/*                    if(kill_index2 > num_threads - 1){ \
-                        actions[num_threads][to_save[num_threads]++] = kill_index; \
-/*printf("kill\n");*/\
-/*                    } else { \
-                        actions[kill_index2][to_save[kill_index2]++] = kill_index; \
-                        counters_snapshot[kill_index] = temp.value; \
-                    } \
-                } else { \
-                    actions[0][to_save[0]++] = kill_index; \
-		    counters_snapshot[kill_index] = temp.value; \
-                } \
-            } else { \
-                kill_ignored++; \
-            } \
-        } \
-        kill_cansave = 0; \
-        kill_acc = 0; \
-	for(kill_index=0; kill_index < num_threads; kill_index++){ \
-            kill_acc = kill_acc + to_save[kill_index]; \
-            if(kill_acc >= kill_index) \
-                kill_cansave = kill_index; \
-            if(num_threads - 1 - kill_ignored - kill_acc - to_save[num_threads] < kill_index){ \
-                break; \
-            } \
-        } \
-	for(kill_index=num_threads; kill_index >= 0; kill_index--){ \
-            if(kill_index > kill_cansave){ \
-                for(kill_index2=0; kill_index2 < to_save[kill_index]; kill_index2++){ \
-/*printf("killing\n");*/ \
-/*                    padded_scalar temp; \
-		    temp.value = triggers[actions[kill_index][kill_index2]].value; /*kill the transaction*/ \
-/*                } \
-            } else { \
-                for(kill_index2=0; kill_index2 < to_save[kill_index]; kill_index2++){ \
-			/*printf("%llu %llu \n",counters_snapshot[actions[kill_index][kill_index2]], counters[actions[kill_index][kill_index2]].value); \
-                    /*printf("commits %d kill_index %d x %d to_save %d aa %d\n",stats_array[local_thread_id].rot_commits,kill_index, kill_index2, to_save[kill_index], actions[kill_index][kill_index2]);*/ \
-/*                    if(counters_snapshot[actions[kill_index][kill_index2]] > FINISHED){ \
-		        while(counters_snapshot[actions[kill_index][kill_index2]] == counters[actions[kill_index][kill_index2]].value){ \
-                            cpu_relax(); \
-			} \
-                    } \
-                } \
-            } \
-        }*/ \
         padded_scalar end_wait_time; \
        	READ_TIMESTAMP(end_wait_time.value); \
        	stats_array[local_thread_id].wait_time += end_wait_time.value - start_wait_time.value; \
-/*int i=0; while(i++ < 100000000);*/ \
 };
 
 # define QUIESCENCE_CALL_GL(){ \
@@ -427,61 +349,48 @@ counters_snapshot[0]=1;*/\
 # define RELEASE_WRITE_LOCK(){ \
 	if(local_exec_mode == 1){ \
 	        __TM_suspend(); \
-/*stats_array[local_thread_id].ends++;*/ \
                 padded_scalar end_time; \
                 READ_TIMESTAMP(end_time.value); \
 		if(local_thread_id == 0){ \
                     tx_length[b_type.value].value = tx_length[b_type.value].value*0.5 + (end_time.value - start_time.value)*0.5; \
-/*printf("after tid %d b_type.value %d length %d\n",local_thread_id, b_type.value, tx_length[b_type.value].value);*/ \
                 } \
-		batching.value = 0; \
+		padded_scalar b_aux; \
+		b_aux.value = 0; \
 /*if(batching.value==0) batching.value = 1; \
 else if(batching.value==1) batching.value=2; \
 else batching.value=0;*/\
 /*batching.value = !batching.value;*/ \
-		/*if(tx_length[b_type.value].value > 0)*/ \
-			for(kill_index=0; kill_index < num_threads; kill_index++){ \
-				if(kill_index != local_thread_id){ \
-					if(counters[kill_index].value > end_time.value + tx_length[b_type.value].value*1){ \
-						batching.value=1; \
-                		               	break; \
-					} \
+		for(kill_index=0; kill_index < num_threads; kill_index++){ \
+			if(kill_index != local_thread_id){ \
+				if(counters[kill_index].value > end_time.value + tx_length[b_type.value].value){ \
+					b_aux.value=1; \
+					batching.value++; \
+                	               	break; \
 				} \
 			} \
-		/*if(batching == 2) batching=0;*/ \
-/*		batching.value=0;*/ \
-		if(batching.value == 0){ \
-/*int x = 0;*/ \
-/*			__TM_suspend(); \
-/*x = 2; \
-padded_scalar y; y.value = 1; \
-/*stats_array[local_thread_id].ends++;*/ \
+		} \
+/*		if(batching.value > 0) batching.value=0; \
+		/*batching.value=0;*/ \
+		if(b_aux.value == 0){ \
                 	counters[local_thread_id].value = INACTIVE; \
-/*			__TM_resume();*/ \
 			rmb(); \
                 	QUIESCENCE_CALL_ROT(); \
 	        	__TM_resume(); \
-/*y.value = 2; \
 /*			QUIESCENCE_CALL_ROT();*/ \
 			__TM_end(); \
-			/*stats_array[local_thread_id].ends++;*/ \
 			counters[local_thread_id].value = FINISHED; \
-			if(ro.value) stats_array[local_thread_id].read_commits++; \
-                	else stats_array[local_thread_id].rot_commits++; \
-			/*printf("thread %d committed in ROT with counters %lu and rot_counters %d\n",local_thread_id,counters[local_thread_id].value,rot_counters[local_thread_id].value); */\
+			if(ro) stats_array[local_thread_id].read_commits+=(batching.value+1); \
+                	else stats_array[local_thread_id].rot_commits+=(batching.value+1); \
+			batching.value = 0; \
 		} else { \
-/*printf("batching type  %d\n",b_type.value);*/ \
+			stats_array[local_thread_id].begins++; \
 			__TM_resume(); \
 		} \
-/*                if(ro) stats_array[local_thread_id].read_commits++; \
-		else stats_array[local_thread_id].rot_commits++;*/ \
 	} else{ \
 		pthread_spin_unlock(&single_global_lock); \
 		/*single_global_lock = 0;*/ \
 		stats_array[local_thread_id].gl_commits++; \
-		/*printf("thread %d committed in GL with counters %lu\n",local_thread_id,counters[local_thread_id].value); */\
 	} \
-	/*printf("thread %d committed\n",local_thread_id); */\
 };
 
 # define RELEASE_BATCHING_WRITE_LOCK(){ \
@@ -493,33 +402,25 @@ padded_scalar y; y.value = 1; \
        __TM_resume(); \
 /*     QUIESCENCE_CALL_ROT();*/ \
        __TM_end(); \
-       /*stats_array[local_thread_id].ends++; */\
        counters[local_thread_id].value = FINISHED; \
-       /*printf("thread %d committed in ROT with counters %lu and rot_counters %d\n",local_thread_id,counters[local_thread_id].value,rot_counters[local_thread_id].value); */\
+       if(ro) stats_array[local_thread_id].read_commits+=batching.value; \
+       else stats_array[local_thread_id].rot_commits+=batching.value; \
 };
 
 # define TM_BEGIN_EXT(b,ro) {  \
-/*        num_threads = global_numThread;*/ \
-/*	local_thread_id = SPECIAL_THREAD_ID();*/ \
-/*	b_type.value = b; \
 /*	unsigned char tx_state = _HTM_STATE (__builtin_ttest ()); \
-        if (tx_state == _HTM_TRANSACTIONAL) { \
-/*		if(tx_length[b].value > tx_length[b_type.value].value){*/ \
+        if (tx_state == _HTM_TRANSACTIONAL) {*/ \
 	if(batching.value > 0) { \
-		if(0){/*tx_length[b].value > tx_length[b_type.value].value*2){*/ \
+		if(tx_length[b].value > tx_length[b_type.value].value*3){ \
 			RELEASE_BATCHING_WRITE_LOCK(); \
-			ACQUIRE_WRITE_LOCK(); \
+			b_type.value=b; \
+			ACQUIRE_WRITE_LOCK(b); \
 		} \
-		else {\
-/*			__TM_suspend(); \
-			stats_array[local_thread_id].ends++; \
-			/*__TM_resume();*/ \
-		} \
+		/*else it is batching transactions */ \
 	} else{ \
-		/*RELEASE_BATCHING_WRITE_LOCK(); */\
-		ACQUIRE_WRITE_LOCK(); \
+		b_type.value=b;\
+		ACQUIRE_WRITE_LOCK(b); \
 	} \
-	b_type.value = b; \
 	READ_TIMESTAMP(start_time.value); \
 }
 

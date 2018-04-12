@@ -246,11 +246,11 @@ __TM_begin_rot (void* const TM_buff)
                 memset(to_save, 0, sizeof(to_save)); */\
                 padded_scalar start_time; \
                 READ_TIMESTAMP(start_time.value); \
-                counters[local_thread_id].value = start_time.value + tx_length[b_type].value; \
+                counters[local_thread_id].value = start_time.value + tx_length[b_type.value].value; \
 		memset(counters_snapshot, 0, sizeof(counters_snapshot)); \
                 memset(actions, 0, sizeof(actions)); \
                 memset(to_save, 0, sizeof(to_save)); \
-/*printf("tid %d b_type %d length %d\n",local_thread_id, b_type, tx_length[b_type].value);*/ \
+/*printf("tid %d b_type.value %d length %d\n",local_thread_id, b_type.value, tx_length[b_type.value].value);*/ \
 		rmb(); \
 		if(IS_LOCKED(single_global_lock)){ \
 			counters[local_thread_id].value = FINISHED; \
@@ -260,7 +260,7 @@ __TM_begin_rot (void* const TM_buff)
 		} \
 		unsigned char tx_status = __TM_begin_rot(&TM_buff); \
 		if (tx_status == _HTM_TBEGIN_STARTED) { \
-                        if(b_type > 2 && rot_budget > 2) triggers[local_thread_id].value = 1; \
+                        if(b_type.value > 2 && rot_budget > 2) triggers[local_thread_id].value = 1; \
                         break; \
                 } \
 		else if(__TM_conflict(&TM_buff)){ \
@@ -339,7 +339,7 @@ __TM_begin_rot (void* const TM_buff)
 	for(kill_index=0; kill_index < num_threads; kill_index++){ \
 		padded_scalar temp; \
 		if(counters_snapshot[kill_index] > FINISHED){ \
-			if(b_type < 3){ \
+			if(b_type.value < 3){ \
                         	temp.value = triggers[kill_index].value; /*kill large transactions*/ \
                 	} \
 			while(counters[kill_index].value == counters_snapshot[kill_index]){ \
@@ -420,8 +420,8 @@ __TM_begin_rot (void* const TM_buff)
                 padded_scalar end_time; \
                 READ_TIMESTAMP(end_time.value); \
 		if(local_thread_id == 0){ \
-                    tx_length[b_type].value = tx_length[b_type].value*0.5 + (end_time.value - counters[local_thread_id].value + tx_length[b_type].value)*0.5; \
-/*printf("after tid %d b_type %d length %d\n",local_thread_id, b_type, tx_length[b_type].value);*/ \
+                    tx_length[b_type.value].value = tx_length[b_type.value].value*0.5 + (end_time.value - counters[local_thread_id].value + tx_length[b_type.value].value)*0.5; \
+/*printf("after tid %d b_type.value %d length %d\n",local_thread_id, b_type.value, tx_length[b_type.value].value);*/ \
                 } \
                 counters[local_thread_id].value = INACTIVE; \
 		rmb(); \
@@ -446,7 +446,7 @@ __TM_begin_rot (void* const TM_buff)
 # define TM_BEGIN_EXT(b,ro) {  \
         num_threads = global_numThread; \
 	local_exec_mode = 0; \
-        b_type = b; \
+        b_type.value = b; \
 	local_thread_id = SPECIAL_THREAD_ID(); \
 	ACQUIRE_WRITE_LOCK(); \
 }

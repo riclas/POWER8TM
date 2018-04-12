@@ -1,6 +1,6 @@
 CC       := gcc
-CFLAGS   += -std=c++11 -g -w -pthread -fpermissive -mcpu=power8 -mtune=power8 -lboost_system
-CFLAGS   += -O2 
+CFLAGS   += -std=c++11 -g -w -pthread -fpermissive -mcpu=power8 -mtune=power8
+CFLAGS   += -O2
 CFLAGS   += -I$(LIB)
 CPP      := g++
 CPPFLAGS += $(CFLAGS)

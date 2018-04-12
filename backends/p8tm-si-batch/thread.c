@@ -173,7 +173,7 @@ thread_startup (long numThread)
     global_threads = (THREAD_T*)malloc(numThread * sizeof(THREAD_T));
     assert(global_threads);
 
-    //writers_lock.value = 0;
+//    single_global_lock = 0;
 
     /* Set up pool */
     THREAD_ATTR_INIT(global_threadAttr);

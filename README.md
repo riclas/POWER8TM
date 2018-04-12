@@ -1,10 +1,5 @@
 ## Framework with a variety of Transactional Memory implementations and benchmarks ##
 
-**Requirements:**
-
-* Install: boost libraries (needed for TPCC)
-
-
 **Backends:**
 
 * p8tm-si: POWER8-TM for Snapshot Isolation
