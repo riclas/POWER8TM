@@ -221,9 +221,9 @@ __TM_begin_rot (void* const TM_buff)
 #  define TM_THREAD_ENTER()
 #  define TM_THREAD_EXIT()
 
-# define IS_LOCKED(lock)        *((volatile long*)(&lock)) != 0
+# define IS_LOCKED(lock)        *((volatile int*)(&lock)) != 0
 
-# define IS_GLOBAL_LOCKED(lock)        *((volatile long*)(&lock)) == 1
+# define IS_GLOBAL_LOCKED(lock)        *((volatile int*)(&lock)) == 1
 
 # define TM_BEGIN(ro) TM_BEGIN_EXT(0,ro)
 
@@ -340,7 +340,7 @@ __TM_begin_rot (void* const TM_buff)
 		padded_scalar temp; \
 		if(counters_snapshot[kill_index] > FINISHED){ \
 			if(b_type.value < 3){ \
-                        	temp.value = triggers[kill_index].value; /*kill large transactions*/ \
+/*                        	temp.value = triggers[kill_index].value; /*kill large transactions*/ \
                 	} \
 			while(counters[kill_index].value == counters_snapshot[kill_index]){ \
 				cpu_relax(); \

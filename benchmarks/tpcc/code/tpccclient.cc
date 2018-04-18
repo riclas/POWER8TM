@@ -156,37 +156,37 @@ void TPCCClient::doOne(TM_ARGDECL_ALONE) {
     // maintained. This is close to the right thing, but not precisely correct.
     // See TPC-C 5.2.4 (page 68).
     int x = generator_->number(1, 100);
-long start, end;
+//long start, end;
     if (x <= global_stock_level_txs_ratio) {
-READ_TIMESTAMP(start);
+//READ_TIMESTAMP(start);
         doStockLevel(TM_ARG_ALONE);
         executed_stock_level_txs_++;
-READ_TIMESTAMP(end);
-printf("doStockLevel: %lu\n", end-start);
+//READ_TIMESTAMP(end);
+//printf("doStockLevel: %lu\n", end-start);
     } else if (x <= global_stock_level_txs_ratio + global_delivery_txs_ratio) {
-READ_TIMESTAMP(start);
+//READ_TIMESTAMP(start);
         doDelivery(TM_ARG_ALONE);
         executed_delivery_txs_++;
-READ_TIMESTAMP(end);
-printf("doDelivery: %lu\n", end-start);
+//READ_TIMESTAMP(end);
+//printf("doDelivery: %lu\n", end-start);
     } else if (x <= global_stock_level_txs_ratio + global_delivery_txs_ratio + global_order_status_txs_ratio) {
-READ_TIMESTAMP(start);
+//READ_TIMESTAMP(start);
         doOrderStatus(TM_ARG_ALONE);
         executed_order_status_txs_++;
-READ_TIMESTAMP(end);
-printf("doOrderStatus: %lu\n", end-start);
+//READ_TIMESTAMP(end);
+//printf("doOrderStatus: %lu\n", end-start);
     } else if (x <= global_stock_level_txs_ratio + global_delivery_txs_ratio + global_order_status_txs_ratio + global_payment_txs_ratio) {
-READ_TIMESTAMP(start);
+//READ_TIMESTAMP(start);
         doPayment(TM_ARG_ALONE);
         executed_payment_txs_++;
-READ_TIMESTAMP(end);
-printf("doPayment: %lu\n", end-start);
+//READ_TIMESTAMP(end);
+//printf("doPayment: %lu\n", end-start);
     } else {
-READ_TIMESTAMP(start);
+//READ_TIMESTAMP(start);
         doNewOrder(TM_ARG_ALONE);
         executed_new_order_txs_++;
-READ_TIMESTAMP(end);
-printf("doNewOrder: %lu\n", end-start);
+//READ_TIMESTAMP(end);
+//printf("doNewOrder: %lu\n", end-start);
     }
 }
 

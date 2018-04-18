@@ -121,7 +121,7 @@ int64_t TPCCTables::stockLevel(TM_ARGDECL int64_t warehouse_id, int64_t district
     // FIXME(nmld): transaction block here
     //TM_THREAD_ENTER();
      int ro = 1;
-    TM_BEGIN(ro);
+    TM_BEGIN_EXT(0,ro);
         District* d = findDistrict(TM_ARG warehouse_id, district_id);
 	//printf("address of d is %p\n",d);
 	int64_t o_id = d->d_next_o_id;
@@ -188,7 +188,7 @@ void TPCCTables::orderStatus(TM_ARGDECL int64_t warehouse_id, int64_t district_i
     // FIXME(nmld): transaction block here
     //TM_THREAD_ENTER();
      int ro = 1;
-    TM_BEGIN(ro);
+    TM_BEGIN_EXT(1,ro);
 	Customer* customer = findCustomer(TM_ARG warehouse_id, district_id, customer_id);
         internalOrderStatus(TM_ARG customer, output);
     TM_END();
@@ -200,7 +200,7 @@ void TPCCTables::orderStatus(TM_ARGDECL int64_t warehouse_id, int64_t district_i
     //~ printf("order status %d %d %s\n", warehouse_id, district_id, c_last);
     //TM_THREAD_ENTER();
      int ro = 1;
-    TM_BEGIN(ro);
+    TM_BEGIN_EXT(5,ro);
     Customer* customer = findCustomerByName(warehouse_id, district_id, c_last);
     internalOrderStatus(TM_ARG customer, output);
     TM_END();
@@ -242,7 +242,7 @@ bool TPCCTables::newOrder(TM_ARGDECL int64_t warehouse_id, int64_t district_id, 
         int ro = 0;
        //TM_THREAD_ENTER();
 	bool result;
-       TM_BEGIN(ro);
+       TM_BEGIN_EXT(2,ro);
         result = newOrderHome(TM_ARG warehouse_id, district_id, customer_id, items, now, output, undo, item_tuples);
         if (!result) {
 	    TM_END();
@@ -448,7 +448,7 @@ void TPCCTables::payment(TM_ARGDECL int64_t warehouse_id, int64_t district_id, i
     // FIXME(nmld): transaction block here
     //TM_THREAD_ENTER();
      int ro = 0;
-    TM_BEGIN(ro);
+    TM_BEGIN_EXT(3,ro);
         Customer* customer = findCustomer(TM_ARG c_warehouse_id, c_district_id, customer_id);
         paymentHome(TM_ARG warehouse_id, district_id, c_warehouse_id, c_district_id, customer_id, h_amount,
                 now, output, undo);
@@ -588,7 +588,7 @@ void TPCCTables::delivery(TM_ARGDECL int64_t warehouse_id, int64_t carrier_id, c
     // FIXME(nmld): transaction block here
     //TM_THREAD_ENTER();
      int ro = 0;
-    TM_BEGIN(ro);
+    TM_BEGIN_EXT(4,ro);
         for (int64_t d_id = 1; d_id <= District::NUM_PER_WAREHOUSE; ++d_id) {
             // Find and remove the lowest numbered order for the district
 

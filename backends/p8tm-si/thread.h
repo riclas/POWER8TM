@@ -157,6 +157,7 @@ extern __attribute__((aligned(CACHE_LINE_SIZE))) pthread_spinlock_t single_globa
 
 extern __attribute__((aligned(CACHE_LINE_SIZE))) padded_statistics_t stats_array[];
 
+extern __thread long counters_snapshot[80];
 extern long total_first_time;
 extern long total_second_time;
 
