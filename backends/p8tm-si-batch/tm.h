@@ -140,7 +140,7 @@ __TM_begin_rot (void* const TM_buff)
   return 0;
 }
 
-#  define TM_STARTUP(numThread, bId) num_threads = numThread;
+#  define TM_STARTUP(numThread, bId)
 
 #  define TM_SHUTDOWN(){ \
     running = 0; \
@@ -224,7 +224,8 @@ __TM_begin_rot (void* const TM_buff)
 	printf("begins: %lu ends: %lu\n", begins, ends); \
 } \
 
-#  define TM_THREAD_ENTER() local_thread_id = SPECIAL_THREAD_ID();
+#  define TM_THREAD_ENTER() local_thread_id = SPECIAL_THREAD_ID(); num_threads = global_numThread;
+
 
 #  define TM_THREAD_EXIT()
 
@@ -246,7 +247,7 @@ __TM_begin_rot (void* const TM_buff)
         	cpu_relax(); \
         } \
 	while(rot_budget > 0){ \
-		batching.value = 0; \
+		batching.value = 1; \
 		rot_status = 1; \
 		TM_buff_type TM_buff; \
                 READ_TIMESTAMP(start_time.value); \
@@ -280,6 +281,7 @@ __TM_begin_rot (void* const TM_buff)
                 	else if(__TM_capacity_abort(&TM_buff)){ \
 				stats_array[local_thread_id].rot_capacity_aborts ++; \
 				if(__TM_is_persistent_abort(&TM_buff)) stats_array[local_thread_id].rot_persistent_aborts ++; \
+				batching.value=0; \
                 	        break; \
 			} \
                 	else{ \
@@ -350,42 +352,48 @@ __TM_begin_rot (void* const TM_buff)
 	if(local_exec_mode == 1){ \
 	        __TM_suspend(); \
 /*                padded_scalar end_time; \
-                READ_TIMESTAMP(end_time.value); \
-                padded_scalar b_aux; \
+                READ_TIMESTAMP(end_time.value);*/ \
+/*                padded_scalar b_aux; \
 /*		if(local_thread_id == 0){ \
                     tx_length[b_type.value].value = tx_length[b_type.value].value*0.5 + (end_time.value - start_time.value)*0.5; \
                 } \
-		b_aux.value = 0; \
-/*if(batching.value==0) batching.value = 1; \
-else if(batching.value==1) batching.value=2; \
+/*		b_aux.value = 0; \
+if(batching.value==0) batching.value = 1; \
+/*else if(batching.value==1) batching.value=2; \
 else batching.value=0;*/\
 /*batching.value = !batching.value;*/ \
-		/*for(kill_index=0; kill_index < num_threads; kill_index++){ \
+/*		for(kill_index=0; kill_index < num_threads; kill_index++){ \
 			if(kill_index != local_thread_id){ \
-				if(counters[kill_index].value > end_time.value + tx_length[b_type.value].value){ \
+				if(counters[kill_index].value > end_time.value + tx_length[b_type.value].value*10){ \
 					b_aux.value=1; \
 					batching.value++; \
                 	               	break; \
 				} \
 			} \
 		}*/ \
-/*		if(batching.value > 0) batching.value=0;*/ \
-/*		b_aux.value=0; \
-		if(b_aux.value == 0){*/ \
+/*b_aux.value=1;*/ \
+/*		if(batching.value > 0){batching.value=0;} \
+		else batching.value++; \
+/*		padded_scalar b_aux;*/ \
+/*		b_aux.value=0;*/ \
+/*else batching.value++;*/ \
+		if(batching.value == 0){ \
                 	counters[local_thread_id].value = INACTIVE; \
 			rmb(); \
-                	QUIESCENCE_CALL_ROT(); \
+/*                	QUIESCENCE_CALL_ROT();*/ \
 	        	__TM_resume(); \
 			/*QUIESCENCE_CALL_ROT();*/ \
 			__TM_end(); \
 			counters[local_thread_id].value = FINISHED; \
-/*			if(ro) stats_array[local_thread_id].read_commits+=(batching.value+1); \
+			if(ro) stats_array[local_thread_id].read_commits+=(batching.value+1); \
                 	else stats_array[local_thread_id].rot_commits+=(batching.value+1); \
-			batching.value = 0; \
-		/*} else { \
+			/*batching.value = 0;*/ \
+		} else { \
 			stats_array[local_thread_id].begins++; \
+/*			batching.value=0;*/ \
 			__TM_resume(); \
-		} */\
+batching.value=0; \
+		} \
 	} else{ \
 		pthread_spin_unlock(&single_global_lock); \
 		/*single_global_lock = 0;*/ \
@@ -408,21 +416,22 @@ else batching.value=0;*/\
 };
 
 # define TM_BEGIN_EXT(b,ro) {  \
-/*	unsigned char tx_state = _HTM_STATE (__builtin_ttest ()); \
-        if (tx_state == _HTM_TRANSACTIONAL) {*/ \
-	/*if(batching.value > 0) { \
-printf("aaa\n"); \
-		if(tx_length[b].value > tx_length[b_type.value].value*3){ \
+	unsigned char tx_state = _HTM_STATE (__builtin_ttest ()); \
+        if (tx_state == _HTM_TRANSACTIONAL) { \
+/*	if(batching.value == 1) { \
+		batching.value=0; \
+/*		if(tx_length[b].value > tx_length[b_type.value].value*5){ \
 			RELEASE_BATCHING_WRITE_LOCK(); \
 			b_type.value=b; \
 			ACQUIRE_WRITE_LOCK(b); \
 		} \
 		/*else it is batching transactions */ \
-	/*} else{*/ \
-		/*b_type.value=b;*/\
+	} else{ \
+/*	if (tx_state == _HTM_NONTRANSACTIONAL) {*/ \
+		b_type.value=b; \
 		ACQUIRE_WRITE_LOCK(b); \
-	/*} \
-	READ_TIMESTAMP(start_time.value);*/ \
+	} \
+	/*READ_TIMESTAMP(start_time.value); */\
 }
 
 # define TM_END(){ \

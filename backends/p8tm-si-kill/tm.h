@@ -218,7 +218,8 @@ __TM_begin_rot (void* const TM_buff)
 		printf("type %d length %d\n",i,tx_length[i]); \
 } \
 
-#  define TM_THREAD_ENTER()
+#  define TM_THREAD_ENTER() num_threads = global_numThread;
+
 #  define TM_THREAD_EXIT()
 
 # define IS_LOCKED(lock)        *((volatile int*)(&lock)) != 0
@@ -444,7 +445,6 @@ __TM_begin_rot (void* const TM_buff)
 };
 
 # define TM_BEGIN_EXT(b,ro) {  \
-        num_threads = global_numThread; \
 	local_exec_mode = 0; \
         b_type.value = b; \
 	local_thread_id = SPECIAL_THREAD_ID(); \

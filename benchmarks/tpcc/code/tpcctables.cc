@@ -188,7 +188,7 @@ void TPCCTables::orderStatus(TM_ARGDECL int64_t warehouse_id, int64_t district_i
     // FIXME(nmld): transaction block here
     //TM_THREAD_ENTER();
      int ro = 1;
-    TM_BEGIN_EXT(1,ro);
+    TM_BEGIN_EXT(2,ro);
 	Customer* customer = findCustomer(TM_ARG warehouse_id, district_id, customer_id);
         internalOrderStatus(TM_ARG customer, output);
     TM_END();
@@ -242,7 +242,7 @@ bool TPCCTables::newOrder(TM_ARGDECL int64_t warehouse_id, int64_t district_id, 
         int ro = 0;
        //TM_THREAD_ENTER();
 	bool result;
-       TM_BEGIN_EXT(2,ro);
+       TM_BEGIN_EXT(4,ro);
         result = newOrderHome(TM_ARG warehouse_id, district_id, customer_id, items, now, output, undo, item_tuples);
         if (!result) {
 	    TM_END();
@@ -588,7 +588,7 @@ void TPCCTables::delivery(TM_ARGDECL int64_t warehouse_id, int64_t carrier_id, c
     // FIXME(nmld): transaction block here
     //TM_THREAD_ENTER();
      int ro = 0;
-    TM_BEGIN_EXT(4,ro);
+    TM_BEGIN_EXT(1,ro);
         for (int64_t d_id = 1; d_id <= District::NUM_PER_WAREHOUSE; ++d_id) {
             // Find and remove the lowest numbered order for the district
 
