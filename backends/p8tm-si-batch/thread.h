@@ -82,8 +82,9 @@ typedef struct spinlock {
 } __attribute__((aligned(CACHE_LINE_SIZE))) spinlock_t;
 
 typedef struct padded_scalar {
+    char prefixPadding[CACHE_LINE_SIZE-sizeof(volatile long)];
     volatile long value;
-    char suffixPadding[CACHE_LINE_SIZE];
+    //char suffixPadding[CACHE_LINE_SIZE];
 } __attribute__((aligned(CACHE_LINE_SIZE))) padded_scalar_t;
 
 typedef struct padded_pointer {
@@ -111,6 +112,7 @@ typedef struct padded_statistics {
     unsigned long rot_self_conflicts;
     unsigned long rot_trans_conflicts;
     unsigned long rot_nontrans_conflicts;
+    unsigned long rot_other_conflicts;
     unsigned long rot_user_aborts;
     unsigned long rot_persistent_aborts;
     unsigned long rot_capacity_aborts;

@@ -164,6 +164,7 @@ __TM_begin_rot (void* const TM_buff)
     unsigned long rot_self_conflicts = 0; \
     unsigned long rot_trans_conflicts = 0; \
     unsigned long rot_nontrans_conflicts = 0; \
+    unsigned long rot_other_conflicts = 0; \
     unsigned long rot_persistent_aborts = 0; \
     unsigned long rot_capacity_aborts = 0; \
     unsigned long rot_other_aborts = 0; \
@@ -190,6 +191,7 @@ __TM_begin_rot (void* const TM_buff)
        rot_self_conflicts += stats_array[i].rot_self_conflicts; \
        rot_trans_conflicts += stats_array[i].rot_trans_conflicts; \
        rot_nontrans_conflicts += stats_array[i].rot_nontrans_conflicts; \
+       rot_other_conflicts += stats_array[i].rot_other_conflicts; \
        rot_persistent_aborts += stats_array[i].rot_persistent_aborts; \
        rot_capacity_aborts += stats_array[i].rot_capacity_aborts; \
        rot_other_aborts += stats_array[i].rot_other_aborts; \
@@ -215,10 +217,11 @@ __TM_begin_rot (void* const TM_buff)
           \t\tROT self aborts:  %lu\n \
           \t\tROT trans aborts:  %lu\n \
           \t\tROT non-trans aborts:  %lu\n \
+          \t\tROT other conflict aborts:  %lu\n \
        \tROT user aborts:  %lu\n \
        \tROT capacity aborts:  %lu\n \
           \t\tROT persistent aborts:  %lu\n \
-       \tROT other aborts:  %lu\n", total_time, wait_time, read_commits+htm_commits+rot_commits+gl_commits, read_commits, htm_commits, rot_commits, gl_commits,htm_conflict_aborts+htm_user_aborts+htm_capacity_aborts+htm_other_aborts+rot_conflict_aborts+rot_user_aborts+rot_capacity_aborts+rot_other_aborts,htm_conflict_aborts,htm_self_conflicts,htm_trans_conflicts,htm_nontrans_conflicts,htm_user_aborts,htm_capacity_aborts,htm_persistent_aborts,htm_other_aborts,rot_conflict_aborts,rot_self_conflicts,rot_trans_conflicts,rot_nontrans_conflicts,rot_user_aborts,rot_capacity_aborts,rot_persistent_aborts,rot_other_aborts); \
+       \tROT other aborts:  %lu\n", total_time, wait_time, read_commits+htm_commits+rot_commits+gl_commits, read_commits, htm_commits, rot_commits, gl_commits,htm_conflict_aborts+htm_user_aborts+htm_capacity_aborts+htm_other_aborts+rot_conflict_aborts+rot_user_aborts+rot_capacity_aborts+rot_other_aborts,htm_conflict_aborts,htm_self_conflicts,htm_trans_conflicts,htm_nontrans_conflicts,htm_user_aborts,htm_capacity_aborts,htm_persistent_aborts,htm_other_aborts,rot_conflict_aborts,rot_self_conflicts,rot_trans_conflicts,rot_nontrans_conflicts,rot_other_conflicts,rot_user_aborts,rot_capacity_aborts,rot_persistent_aborts,rot_other_aborts); \
 	for(int i=0; i < 6; i++) \
 		printf("type %d length %d\n",i,tx_length[i].value); \
 	printf("begins: %lu ends: %lu\n", begins, ends); \
@@ -241,13 +244,40 @@ __TM_begin_rot (void* const TM_buff)
 
 # define INACTIVE -1
 
+# define ACQUIRE_READ_LOCK(b) { \
+	while(1){ \
+		READ_TIMESTAMP(start_time.value); \
+                counters[local_thread_id].value = start_time.value + tx_length[b].value; \
+		rmb(); \
+		if(IS_LOCKED(single_global_lock)){ \
+			counters[local_thread_id].value = FINISHED; \
+			rmb(); \
+			while(IS_LOCKED(single_global_lock)){ \
+                        	cpu_relax(); \
+	                } \
+			continue; \
+		} \
+		break; \
+	} \
+}; \
+
+# define RELEASE_READ_LOCK(){ \
+	counters[local_thread_id].value=FINISHED; \
+	if(local_thread_id == 0){ \
+		padded_scalar end_time; \
+               	READ_TIMESTAMP(end_time.value); \
+		tx_length[b_type.value].value = tx_length[b_type.value].value*0.5 + (end_time.value - start_time.value)*0.5; \
+        } \
+	stats_array[local_thread_id].read_commits++; \
+}
+
 # define USE_ROT(b){ \
 	int rot_budget = ROT_RETRIES; \
 	while(IS_LOCKED(single_global_lock)){ \
         	cpu_relax(); \
         } \
 	while(rot_budget > 0){ \
-		batching.value = 1; \
+		batching.value = 0; \
 		rot_status = 1; \
 		TM_buff_type TM_buff; \
                 READ_TIMESTAMP(start_time.value); \
@@ -270,6 +300,7 @@ __TM_begin_rot (void* const TM_buff)
 				if(__TM_is_self_conflict(&TM_buff)) stats_array[local_thread_id].rot_self_conflicts++; \
 				else if(__TM_is_trans_conflict(&TM_buff)) stats_array[local_thread_id].rot_trans_conflicts++; \
 				else if(__TM_is_nontrans_conflict(&TM_buff)) stats_array[local_thread_id].rot_nontrans_conflicts++; \
+				else  stats_array[local_thread_id].rot_other_conflicts++; \
                 	        rot_budget--; \
 				counters[local_thread_id].value = INACTIVE; \
                 		rmb(); \
@@ -309,7 +340,7 @@ __TM_begin_rot (void* const TM_buff)
 	QUIESCENCE_CALL_GL(); \
 };
 
- # define ACQUIRE_WRITE_LOCK(b) { \
+# define ACQUIRE_WRITE_LOCK(b) { \
 	local_exec_mode = 1; \
 	int rot_status = 0; \
 	USE_ROT(b); \
@@ -321,23 +352,24 @@ __TM_begin_rot (void* const TM_buff)
 };\
 
 # define QUIESCENCE_CALL_ROT(){ \
-        padded_scalar start_wait_time; \
-        READ_TIMESTAMP(start_wait_time.value); \
+/*        padded_scalar start_wait_time; \
+        READ_TIMESTAMP(start_wait_time.value);*/ \
 	for(kill_index=0; kill_index < num_threads; kill_index++){ \
 		counters_snapshot[kill_index] = counters[kill_index].value; \
 	} \
-	for(kill_index=0; kill_index < num_threads; kill_index++){ \
-		if(kill_index != local_thread_id){ \
-			if(counters_snapshot[kill_index] > FINISHED){ \
-				while(counters[kill_index].value == counters_snapshot[kill_index]){ \
+long kill_idx; \
+	for(kill_idx=0; kill_idx < num_threads; kill_idx++){ \
+		if(kill_idx != local_thread_id){ \
+			if(counters_snapshot[kill_idx] > FINISHED){ \
+				while(counters[kill_idx].value == counters_snapshot[kill_idx]){ \
 					cpu_relax(); \
 				} \
 			} \
 		} \
 	} \
-        padded_scalar end_wait_time; \
+/*        padded_scalar end_wait_time; \
        	READ_TIMESTAMP(end_wait_time.value); \
-       	stats_array[local_thread_id].wait_time += end_wait_time.value - start_wait_time.value; \
+       	stats_array[local_thread_id].wait_time += end_wait_time.value - start_wait_time.value;*/ \
 };
 
 # define QUIESCENCE_CALL_GL(){ \
@@ -351,48 +383,48 @@ __TM_begin_rot (void* const TM_buff)
 # define RELEASE_WRITE_LOCK(){ \
 	if(local_exec_mode == 1){ \
 	        __TM_suspend(); \
-/*                padded_scalar end_time; \
-                READ_TIMESTAMP(end_time.value);*/ \
-/*                padded_scalar b_aux; \
-/*		if(local_thread_id == 0){ \
+                padded_scalar end_time; \
+                READ_TIMESTAMP(end_time.value); \
+                padded_scalar b_aux; \
+		if(local_thread_id == 0){ \
                     tx_length[b_type.value].value = tx_length[b_type.value].value*0.5 + (end_time.value - start_time.value)*0.5; \
                 } \
-/*		b_aux.value = 0; \
+		b_aux.value = 0; \
 if(batching.value==0) batching.value = 1; \
-/*else if(batching.value==1) batching.value=2; \
-else batching.value=0;*/\
+/*else if(batching.value==1) batching.value=2;*/ \
+else batching.value=0;\
 /*batching.value = !batching.value;*/ \
 /*		for(kill_index=0; kill_index < num_threads; kill_index++){ \
 			if(kill_index != local_thread_id){ \
-				if(counters[kill_index].value > end_time.value + tx_length[b_type.value].value*10){ \
+				if(counters[kill_index].value > end_time.value + tx_length[b_type.value].value*2){ \
 					b_aux.value=1; \
 					batching.value++; \
                 	               	break; \
 				} \
 			} \
-		}*/ \
-/*b_aux.value=1;*/ \
+		} \
+/*b_aux.value=0; \
 /*		if(batching.value > 0){batching.value=0;} \
 		else batching.value++; \
 /*		padded_scalar b_aux;*/ \
-/*		b_aux.value=0;*/ \
+/*		b_aux.value=0; \
 /*else batching.value++;*/ \
+/*batching.value=0;*/ \
 		if(batching.value == 0){ \
                 	counters[local_thread_id].value = INACTIVE; \
 			rmb(); \
-/*                	QUIESCENCE_CALL_ROT();*/ \
+                	QUIESCENCE_CALL_ROT(); \
 	        	__TM_resume(); \
-			/*QUIESCENCE_CALL_ROT();*/ \
+/*			QUIESCENCE_CALL_ROT();*/ \
 			__TM_end(); \
 			counters[local_thread_id].value = FINISHED; \
-			if(ro) stats_array[local_thread_id].read_commits+=(batching.value+1); \
-                	else stats_array[local_thread_id].rot_commits+=(batching.value+1); \
-			/*batching.value = 0;*/ \
+                	stats_array[local_thread_id].rot_commits+=(batching.value+1); \
+			batching.value = 0; \
 		} else { \
 			stats_array[local_thread_id].begins++; \
 /*			batching.value=0;*/ \
+			READ_TIMESTAMP(start_time.value); \
 			__TM_resume(); \
-batching.value=0; \
 		} \
 	} else{ \
 		pthread_spin_unlock(&single_global_lock); \
@@ -413,29 +445,44 @@ batching.value=0; \
        counters[local_thread_id].value = FINISHED; \
        if(ro) stats_array[local_thread_id].read_commits+=batching.value; \
        else stats_array[local_thread_id].rot_commits+=batching.value; \
+	batching.value=0; \
 };
 
 # define TM_BEGIN_EXT(b,ro) {  \
-	unsigned char tx_state = _HTM_STATE (__builtin_ttest ()); \
-        if (tx_state == _HTM_TRANSACTIONAL) { \
-/*	if(batching.value == 1) { \
-		batching.value=0; \
-/*		if(tx_length[b].value > tx_length[b_type.value].value*5){ \
+/*	unsigned char tx_state = _HTM_STATE (__builtin_ttest ()); \
+        if (tx_state == _HTM_TRANSACTIONAL) {*/ \
+	if(batching.value > 0) { \
+/*		batching.value=0;*/ \
+		if(tx_length[b].value > tx_length[b_type.value].value*2){ \
 			RELEASE_BATCHING_WRITE_LOCK(); \
 			b_type.value=b; \
-			ACQUIRE_WRITE_LOCK(b); \
+                	if(ro){ \
+                        	ACQUIRE_READ_LOCK(b); \
+                	} else { \
+                        	ACQUIRE_WRITE_LOCK(b); \
+                	} \
 		} \
 		/*else it is batching transactions */ \
 	} else{ \
 /*	if (tx_state == _HTM_NONTRANSACTIONAL) {*/ \
 		b_type.value=b; \
-		ACQUIRE_WRITE_LOCK(b); \
+		if(ro){ \
+			ACQUIRE_READ_LOCK(b); \
+		} else { \
+			ACQUIRE_WRITE_LOCK(b); \
+		} \
 	} \
-	/*READ_TIMESTAMP(start_time.value); */\
 }
 
 # define TM_END(){ \
-	RELEASE_WRITE_LOCK(); \
+/*	unsigned char tx_state = _HTM_STATE (__builtin_ttest ()); \
+        if (tx_state == _HTM_TRANSACTIONAL) {*/ \
+	if(batching.value > 0 || !ro){ \
+/*	if(!ro){*/ \
+		RELEASE_WRITE_LOCK(); \
+	} else { \
+		RELEASE_READ_LOCK(); \
+	} \
 };
 
 #    define TM_BEGIN_RO()                 TM_BEGIN(1)

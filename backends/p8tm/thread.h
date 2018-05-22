@@ -82,8 +82,9 @@ typedef struct spinlock {
 } __attribute__((aligned(CACHE_LINE_SIZE))) spinlock_t;
 
 typedef struct padded_scalar {
+    char prefixPadding[CACHE_LINE_SIZE];
     volatile long value;
-    char suffixPadding[CACHE_LINE_SIZE];
+    //char suffixPadding[CACHE_LINE_SIZE];
 } __attribute__((aligned(CACHE_LINE_SIZE))) padded_scalar_t;
 
 typedef struct padded_pointer {

@@ -233,7 +233,7 @@ int main(int argc, char** argv) {
     int64_t begin = clock->getMicroseconds();
 
     int ro = 1;
-    TM_BEGIN(ro);
+    TM_BEGIN_EXT(6,ro);
     local_exec_mode = 2;
     TPCCGenerator generator(random, now, Item::NUM_ITEMS, District::NUM_PER_WAREHOUSE,
             Customer::NUM_PER_DISTRICT, NewOrder::INITIAL_NUM_PER_DISTRICT);

@@ -141,6 +141,14 @@ __TM_begin_rot (void* const TM_buff)
   return 0;
 }
 
+extern __inline long
+__attribute__ ((__gnu_inline__, __always_inline__, __artificial__))
+__TM_is_tfiar_exact(void* const TM_buff)
+{
+  texasr_t texasr = *_TEXASR_PTR (TM_buff);
+ return _TEXASR_TFIAR_EXACT(texasr);
+}
+
 #  define TM_STARTUP(numThread, bId)
 #  define TM_SHUTDOWN(){ \
     unsigned long wait_time = 0; \
@@ -161,6 +169,7 @@ __TM_begin_rot (void* const TM_buff)
     unsigned long rot_self_conflicts = 0; \
     unsigned long rot_trans_conflicts = 0; \
     unsigned long rot_nontrans_conflicts = 0; \
+    unsigned long rot_other_conflicts = 0; \
     unsigned long rot_persistent_aborts = 0; \
     unsigned long rot_capacity_aborts = 0; \
     unsigned long rot_other_aborts = 0; \
@@ -185,6 +194,7 @@ __TM_begin_rot (void* const TM_buff)
        rot_self_conflicts += stats_array[i].rot_self_conflicts; \
        rot_trans_conflicts += stats_array[i].rot_trans_conflicts; \
        rot_nontrans_conflicts += stats_array[i].rot_nontrans_conflicts; \
+       rot_other_conflicts += stats_array[i].rot_other_conflicts; \
        rot_persistent_aborts += stats_array[i].rot_persistent_aborts; \
        rot_capacity_aborts += stats_array[i].rot_capacity_aborts; \
        rot_other_aborts += stats_array[i].rot_other_aborts; \
@@ -210,10 +220,11 @@ __TM_begin_rot (void* const TM_buff)
           \t\tROT self aborts:  %lu\n \
           \t\tROT trans aborts:  %lu\n \
           \t\tROT non-trans aborts:  %lu\n \
+          \t\tROT other conflict aborts:  %lu\n \
        \tROT user aborts:  %lu\n \
        \tROT capacity aborts:  %lu\n \
           \t\tROT persistent aborts:  %lu\n \
-       \tROT other aborts:  %lu\n", total_time, wait_time, read_commits+htm_commits+rot_commits+gl_commits, read_commits, htm_commits, rot_commits, gl_commits,htm_conflict_aborts+htm_user_aborts+htm_capacity_aborts+htm_other_aborts+rot_conflict_aborts+rot_user_aborts+rot_capacity_aborts+rot_other_aborts,htm_conflict_aborts,htm_self_conflicts,htm_trans_conflicts,htm_nontrans_conflicts,htm_user_aborts,htm_capacity_aborts,htm_persistent_aborts,htm_other_aborts,rot_conflict_aborts,rot_self_conflicts,rot_trans_conflicts,rot_nontrans_conflicts,rot_user_aborts,rot_capacity_aborts,rot_persistent_aborts,rot_other_aborts); \
+       \tROT other aborts:  %lu\n", total_time, wait_time, read_commits+htm_commits+rot_commits+gl_commits, read_commits, htm_commits, rot_commits, gl_commits,htm_conflict_aborts+htm_user_aborts+htm_capacity_aborts+htm_other_aborts+rot_conflict_aborts+rot_user_aborts+rot_capacity_aborts+rot_other_aborts,htm_conflict_aborts,htm_self_conflicts,htm_trans_conflicts,htm_nontrans_conflicts,htm_user_aborts,htm_capacity_aborts,htm_persistent_aborts,htm_other_aborts,rot_conflict_aborts,rot_self_conflicts,rot_trans_conflicts,rot_nontrans_conflicts,rot_other_conflicts,rot_user_aborts,rot_capacity_aborts,rot_persistent_aborts,rot_other_aborts); \
 /*printf("first time: %d, second time: %d\n",total_first_time,total_second_time);*/ \
 } \
 
@@ -282,9 +293,12 @@ __TM_begin_rot (void* const TM_buff)
                 } \
 		else if(__TM_conflict(&TM_buff)){ \
                         stats_array[local_thread_id].rot_conflict_aborts ++; \
-			if(__TM_is_self_conflict(&TM_buff)) stats_array[local_thread_id].rot_self_conflicts++; \
+			if(__TM_is_self_conflict(&TM_buff)){ stats_array[local_thread_id].rot_self_conflicts++; \
+printf("conflict at %p : %d\n",__TM_failure_address(&TM_buff), __TM_is_tfiar_exact(&TM_buff)); \
+}\
 			else if(__TM_is_trans_conflict(&TM_buff)) stats_array[local_thread_id].rot_trans_conflicts++; \
 			else if(__TM_is_nontrans_conflict(&TM_buff)) stats_array[local_thread_id].rot_nontrans_conflicts++; \
+			else stats_array[local_thread_id].rot_other_conflicts++; \
                         rot_status = 0; \
                         rot_budget--; \
 			state = counters[local_thread_id].value & 7; \
@@ -347,6 +361,7 @@ __TM_begin_rot (void* const TM_buff)
 /*	long counters_snapshot[80];*/ \
 	for(index=0; index < 80; index++){ \
                 if (index == num_threads) break; \
+		if(index == local_thread_id) continue; \
 		temp = counters[index].value; \
 		state = temp & 7; \
 		/*printf("state is %d,%d\n",state,temp); */\
@@ -365,10 +380,15 @@ __TM_begin_rot (void* const TM_buff)
 				break;\
 		} \
         } \
+	/*__TM_suspend(); \
+        counters[local_thread_id].value += 4; \
+        rmb(); \
+         __TM_resume();*/ \
 	long start_wait_time; \
 	READ_TIMESTAMP(start_wait_time); \
 	/*long waited_threads = 0, waited = 0; */\
 	for(index=0; index < num_threads; index++){ \
+		if(index == local_thread_id) continue; \
 		if(counters_snapshot[index] != 0){ \
 			/*void* temp = triggers[index].value;*/ \
 			while(counters[index].value == counters_snapshot[index]){ \
@@ -379,31 +399,6 @@ __TM_begin_rot (void* const TM_buff)
         long end_wait_time; \
        	READ_TIMESTAMP(end_wait_time); \
        	stats_array[local_thread_id].wait_time += end_wait_time - start_wait_time; \
-};
-
-# define QUIESCENCE_CALL(){ \
-        long num_threads = global_numThread; \
-        long index;\
-        volatile long temp; \
-        long counters_snapshot[80]; \
-        for(index=0; index < 80; index++){ \
-                if (index == num_threads) break; \
-                temp = counters[index].value; \
-                if(temp & 1){ \
-                        counters_snapshot[index] = temp; \
-                }\
-                else{ \
-                        counters_snapshot[index] = 0; \
-                } \
-        } \
-        for(index=0; index < 80; index++){ \
-                if (index == num_threads) break; \
-                if(counters_snapshot[index] != 0){ \
-                        while(counters[index].value == counters_snapshot[index]){ \
-				cpu_relax(); \
-                        } \
-                } \
-        } \
 };
 
 # define QUIESCENCE_CALL_GL(){ \
@@ -419,8 +414,10 @@ __TM_begin_rot (void* const TM_buff)
 # define RELEASE_WRITE_LOCK(){ \
 	if(local_exec_mode == 1){ \
 	        __TM_suspend(); \
-	        counters[local_thread_id].value += 4; /*=7 committing rot*/ \
+	        counters[local_thread_id].value+=4; /*=7 committing rot*/ \
+/*		__TM_suspend();*/ \
         	rmb(); \
+/*               QUIESCENCE_CALL_ROT();*/ \
 	         __TM_resume(); \
 		QUIESCENCE_CALL_ROT(); \
 		/*__TM_abort();*/ \
