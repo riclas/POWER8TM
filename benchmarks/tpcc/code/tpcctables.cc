@@ -211,12 +211,12 @@ __attribute__((transaction_safe)) void TPCCTables::internalOrderStatus(TM_ARGDEC
     output->c_id = customer->c_id;
     if(customer->c_id > 2){
     // retrieve from customer: balance, first, middle, last
-    if(local_exec_mode == 1 || local_exec_mode == 3){
-      output->c_balance = SLOW_PATH_SHARED_READ_D(customer->c_balance);
-    }
-    else{
+    //if(local_exec_mode == 1 || local_exec_mode == 3){
+    //  output->c_balance = SLOW_PATH_SHARED_READ_D(customer->c_balance);
+    //}
+    //else{
       output->c_balance = FAST_PATH_SHARED_READ_D(customer->c_balance);
-    }
+    //}
 
     // Find the row in the order table with largest o_id
     Order* order = findLastOrderByCustomer(TM_ARG customer->c_w_id, customer->c_d_id, customer->c_id);

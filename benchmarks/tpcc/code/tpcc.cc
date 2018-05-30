@@ -112,11 +112,12 @@ void* client(void *data) {
     SystemClock* clock = new SystemClock();
     int64_t begin = clock->getMicroseconds();
 
-
     do {
-        client->doOne(TM_ARG_ALONE);
+        //client->doOne(TM_ARG_ALONE);
+        client->doOrderStatus(TM_ARG_ALONE);
 	//printf("Tx executed");
     } while (((clock->getMicroseconds() - begin) / 1000000) < duration_secs);
+  	//}while(--txs.value);
 
     TM_THREAD_EXIT();
 }
