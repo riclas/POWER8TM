@@ -15,7 +15,7 @@ namespace tpcc {
 class RandomGenerator;
 }
 
-class Clock;
+class SystemClock;
 class TPCCDB;
 
 // Generates transactions according to the TPC-C specification. This ignores the fact that
@@ -24,11 +24,11 @@ class TPCCDB;
 class TPCCClient {
 public:
     // Owns clock, generator and db.
-    TPCCClient(Clock* clock, TPCCDB* db, int num_items,
+    TPCCClient(TPCCDB* db, int num_items,
             int num_warehouses, int districts_per_warehouse, int customers_per_district);
     ~TPCCClient();
 
-    void setGenerator(tpcc::RandomGenerator*);
+    void setClockGenerator(SystemClock*, tpcc::RandomGenerator*);
     void doStockLevel(TM_ARGDECL_ALONE);
     void doOrderStatus(TM_ARGDECL_ALONE);
     void doDelivery(TM_ARGDECL_ALONE);
@@ -67,7 +67,7 @@ private:
     int32_t generateCID();
     int32_t generateItemID();
 
-    Clock* clock_;
+    SystemClock* clock_;
     tpcc::RandomGenerator* generator_;
     TPCCDB* db_;
     int num_items_;

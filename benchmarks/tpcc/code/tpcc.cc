@@ -99,6 +99,8 @@ unsigned long total_trials;
 int global_num_threads = 0;
 pthread_rwlock_t rw_lock;
 tpcc::NURandC cLoad;
+TPCCClient** clients;
+TPCCTables* tables;
 
 void* client(void *data) {
     TM_THREAD_ENTER();
@@ -109,20 +111,22 @@ void* client(void *data) {
 
     bindThread(local_thread_id);
 
-    TPCCClient* client = (TPCCClient*)((TPCCClient**) data)[local_thread_id];
-    SystemClock* clock = new SystemClock();
+    //TPCCClient* client = (TPCCClient*)((TPCCClient**) data)[local_thread_id];
+clients[local_thread_id] = new TPCCClient(tables, Item::NUM_ITEMS, (int*) data,
+               	District::NUM_PER_WAREHOUSE, Customer::NUM_PER_DISTRICT);
+__attribute__((aligned(CACHE_LINE_SIZE)))    SystemClock* clock = new SystemClock();
     int64_t begin = clock->getMicroseconds();
     tpcc::RealRandomGenerator* random = new tpcc::RealRandomGenerator();
     random->setC(tpcc::NURandC::makeRandomForRun(random, cLoad));
-    client->setGenerator(random);
+    clients[local_thread_id]->setClockGenerator(clock, random);
 
 int i=0;
     do {
-        //client->doOne(TM_ARG_ALONE);
-        client->doOrderStatus(TM_ARG_ALONE);
+        clients[local_thread_id]->doOne(TM_ARG_ALONE);
+//        client->doOrderStatus(TM_ARG_ALONE);
 	//printf("Tx executed");
-} while(i++ < 1000000);
-    //} while (((clock->getMicroseconds() - begin) / 1000000) < duration_secs);
+//} while(i++ < duration_secs * 100000);
+    } while (((clock->getMicroseconds() - begin) / 1000000) < duration_secs);
   	//}while(--txs.value);
 
     TM_THREAD_EXIT();
@@ -214,7 +218,7 @@ int main(int argc, char** argv) {
         }
       }
 
-    TPCCTables* tables = new TPCCTables();
+    tables = new TPCCTables();
     SystemClock* clock = new SystemClock();
 
     // Create a generator for filling the database.
@@ -255,16 +259,16 @@ int main(int argc, char** argv) {
 
 
     // Client owns all the parameters
-    TPCCClient** clients = (TPCCClient**) malloc(num_clients * sizeof(TPCCClient*));
+    clients = (TPCCClient**) malloc(num_clients * sizeof(TPCCClient*));
     pthread_t* threads = (pthread_t*) malloc(num_clients * sizeof(pthread_t));
-    for (c = 0; c < num_clients; c++) {
+/*    for (c = 0; c < num_clients; c++) {
         // Change the constants for run
 //        random = new tpcc::RealRandomGenerator();
 //        random->setC(tpcc::NURandC::makeRandomForRun(random, cLoad));
-        clients[c] = new TPCCClient(clock, tables, Item::NUM_ITEMS, static_cast<int>(num_warehouses),
+        clients[c] = new TPCCClient(tables, Item::NUM_ITEMS, static_cast<int>(num_warehouses),
                 District::NUM_PER_WAREHOUSE, Customer::NUM_PER_DISTRICT);
     }
-
+*/
     int64_t next_workload_secs;
     uint64_t pos_vec = 0;
     if (adapt_workload) {
@@ -318,7 +322,7 @@ int main(int argc, char** argv) {
     //for (c = 0; c < num_clients; c++) {
     //	pthread_create(&threads[c], NULL, client, clients[c]);
     //}
-    thread_start(client, clients);
+    thread_start(client, num_warehouses);
 
 /*    for (c = 0; c < num_clients; c++) {
     	pthread_join(threads[c], NULL);

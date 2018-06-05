@@ -22,9 +22,8 @@ volatile int global_payment_txs_ratio;
 volatile int global_new_order_ratio;
 volatile int global_num_warehouses;
 
-TPCCClient::TPCCClient(Clock* clock, TPCCDB* db, int num_items,
+TPCCClient::TPCCClient(TPCCDB* db, int num_items,
         int num_warehouses, int districts_per_warehouse, int customers_per_district) :
-        clock_(clock),
         db_(db),
         num_items_(num_items),
         num_warehouses_(num_warehouses),
@@ -38,7 +37,6 @@ TPCCClient::TPCCClient(Clock* clock, TPCCDB* db, int num_items,
         executed_order_status_txs_(0),
         executed_payment_txs_(0),
         executed_new_order_txs_(0) {
-    ASSERT(clock_ != NULL);
     ASSERT(db_ != NULL);
     ASSERT(1 <= num_items_ && num_items_ <= Item::NUM_ITEMS);
     ASSERT(1 <= num_warehouses_ && num_warehouses_ <= Warehouse::MAX_WAREHOUSE_ID);
@@ -50,9 +48,11 @@ TPCCClient::TPCCClient(Clock* clock, TPCCDB* db, int num_items,
 TPCCClient::~TPCCClient() {
 }
 
-void TPCCClient::setGenerator(tpcc::RandomGenerator* generator){
+void TPCCClient::setClockGenerator(SystemClock* clock, tpcc::RandomGenerator* generator){
     generator_ = generator;
+    clock_ = clock;
     ASSERT(generator_ != NULL);
+    ASSERT(clock_ != NULL);
 }
 
 void TPCCClient::doStockLevel(TM_ARGDECL_ALONE) {

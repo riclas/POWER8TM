@@ -413,13 +413,13 @@ __TM_is_tfiar_exact(void* const TM_buff)
               } \
               } \
               } \
-            /*b_aux.value=0; \
-            /*		if(batching.value > 0){batching.value=0;} \
+            /*b_aux.value=0;*/ \
+/*            		if(batching.value > 0){batching.value=0;} \
             else batching.value++; \
             /*		padded_scalar b_aux;*/ \
             /*		b_aux.value=0; \
             /*else batching.value++;*/ \
-            /*batching.value=0;*/ \
+/*            if(batching.value==0){*/ \
                 counters[local_thread_id].value = INACTIVE; \
                 rmb(); \
                 QUIESCENCE_CALL_ROT(); \
@@ -427,12 +427,12 @@ __TM_is_tfiar_exact(void* const TM_buff)
                 /*			QUIESCENCE_CALL_ROT();*/ \
                 __TM_end(); \
                 counters[local_thread_id].value = FINISHED; \
-                stats_array[local_thread_id].rot_commits++; \
-                /*								} else { \
-                                                stats_array[local_thread_id].begins++; \
-                /*READ_TIMESTAMP(start_time.value); */\
-                /*												__TM_resume(); \
-                                                                }*/ \
+                stats_array[local_thread_id].rot_commits++;/*=batching.value+1;*/ \
+            /*} else { \
+                stats_array[local_thread_id].begins++; \
+                READ_TIMESTAMP(start_time.value); \
+                __TM_resume(); \
+            }*/ \
     }/* else {\
         __TM_suspend(); \
         padded_scalar b_aux; \
