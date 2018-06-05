@@ -98,6 +98,7 @@ unsigned long total_trials;
 
 int global_num_threads = 0;
 pthread_rwlock_t rw_lock;
+tpcc::NURandC cLoad;
 
 void* client(void *data) {
     TM_THREAD_ENTER();
@@ -111,12 +112,17 @@ void* client(void *data) {
     TPCCClient* client = (TPCCClient*)((TPCCClient**) data)[local_thread_id];
     SystemClock* clock = new SystemClock();
     int64_t begin = clock->getMicroseconds();
+    tpcc::RealRandomGenerator* random = new tpcc::RealRandomGenerator();
+    random->setC(tpcc::NURandC::makeRandomForRun(random, cLoad));
+    client->setGenerator(random);
 
+int i=0;
     do {
         //client->doOne(TM_ARG_ALONE);
         client->doOrderStatus(TM_ARG_ALONE);
 	//printf("Tx executed");
-    } while (((clock->getMicroseconds() - begin) / 1000000) < duration_secs);
+} while(i++ < 1000000);
+    //} while (((clock->getMicroseconds() - begin) / 1000000) < duration_secs);
   	//}while(--txs.value);
 
     TM_THREAD_EXIT();
@@ -213,7 +219,7 @@ int main(int argc, char** argv) {
 
     // Create a generator for filling the database.
     tpcc::RealRandomGenerator* random = new tpcc::RealRandomGenerator();
-    tpcc::NURandC cLoad = tpcc::NURandC::makeRandom(random);
+    cLoad = tpcc::NURandC::makeRandom(random);
     random->setC(cLoad);
 
 
@@ -253,9 +259,9 @@ int main(int argc, char** argv) {
     pthread_t* threads = (pthread_t*) malloc(num_clients * sizeof(pthread_t));
     for (c = 0; c < num_clients; c++) {
         // Change the constants for run
-        random = new tpcc::RealRandomGenerator();
-        random->setC(tpcc::NURandC::makeRandomForRun(random, cLoad));
-        clients[c] = new TPCCClient(clock, random, tables, Item::NUM_ITEMS, static_cast<int>(num_warehouses),
+//        random = new tpcc::RealRandomGenerator();
+//        random->setC(tpcc::NURandC::makeRandomForRun(random, cLoad));
+        clients[c] = new TPCCClient(clock, tables, Item::NUM_ITEMS, static_cast<int>(num_warehouses),
                 District::NUM_PER_WAREHOUSE, Customer::NUM_PER_DISTRICT);
     }
 

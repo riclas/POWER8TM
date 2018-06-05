@@ -24,10 +24,11 @@ class TPCCDB;
 class TPCCClient {
 public:
     // Owns clock, generator and db.
-    TPCCClient(Clock* clock, tpcc::RandomGenerator* generator, TPCCDB* db, int num_items,
+    TPCCClient(Clock* clock, TPCCDB* db, int num_items,
             int num_warehouses, int districts_per_warehouse, int customers_per_district);
     ~TPCCClient();
 
+    void setGenerator(tpcc::RandomGenerator*);
     void doStockLevel(TM_ARGDECL_ALONE);
     void doOrderStatus(TM_ARGDECL_ALONE);
     void doDelivery(TM_ARGDECL_ALONE);

@@ -22,10 +22,9 @@ volatile int global_payment_txs_ratio;
 volatile int global_new_order_ratio;
 volatile int global_num_warehouses;
 
-TPCCClient::TPCCClient(Clock* clock, tpcc::RandomGenerator* generator, TPCCDB* db, int num_items,
+TPCCClient::TPCCClient(Clock* clock, TPCCDB* db, int num_items,
         int num_warehouses, int districts_per_warehouse, int customers_per_district) :
         clock_(clock),
-        generator_(generator),
         db_(db),
         num_items_(num_items),
         num_warehouses_(num_warehouses),
@@ -40,7 +39,6 @@ TPCCClient::TPCCClient(Clock* clock, tpcc::RandomGenerator* generator, TPCCDB* d
         executed_payment_txs_(0),
         executed_new_order_txs_(0) {
     ASSERT(clock_ != NULL);
-    ASSERT(generator_ != NULL);
     ASSERT(db_ != NULL);
     ASSERT(1 <= num_items_ && num_items_ <= Item::NUM_ITEMS);
     ASSERT(1 <= num_warehouses_ && num_warehouses_ <= Warehouse::MAX_WAREHOUSE_ID);
@@ -52,6 +50,11 @@ TPCCClient::TPCCClient(Clock* clock, tpcc::RandomGenerator* generator, TPCCDB* d
 TPCCClient::~TPCCClient() {
 }
 
+void TPCCClient::setGenerator(tpcc::RandomGenerator* generator){
+    generator_ = generator;
+    ASSERT(generator_ != NULL);
+}
+
 void TPCCClient::doStockLevel(TM_ARGDECL_ALONE) {
     int32_t threshold = generator_->number(MIN_STOCK_LEVEL_THRESHOLD, MAX_STOCK_LEVEL_THRESHOLD);
     int result = db_->stockLevel(TM_ARG generateWarehouse(), generateDistrict(), threshold);
@@ -60,16 +63,16 @@ void TPCCClient::doStockLevel(TM_ARGDECL_ALONE) {
 
 void TPCCClient::doOrderStatus(TM_ARGDECL_ALONE) {
     OrderStatusOutput output;
-    int y = generator_->number(1, 100);
+/*    int y = generator_->number(1, 100);
     if (y < 0) {    // FIXME: we are not supporting searches by Customer Name
         // 60%: order status by last name
         char c_last[Customer::MAX_LAST+1];
         generator_->lastName(c_last, customers_per_district_);
         db_->orderStatus(TM_ARG generateWarehouse(), generateDistrict(), c_last, &output);
-    } else {
+    } else {*/
         // 40%: order status by id
         db_->orderStatus(TM_ARG generateWarehouse(), generateDistrict(), generateCID(), &output);
-    }
+    //}
 }
 
 void TPCCClient::doDelivery(TM_ARGDECL_ALONE) {
